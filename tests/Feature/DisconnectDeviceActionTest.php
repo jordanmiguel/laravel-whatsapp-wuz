@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\DisconnectDeviceAction;
 use JordanMiguel\Wuz\Events\DeviceDisconnected;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('logs out the device and updates state', function () {
     Http::preventStrayRequests();
@@ -14,8 +14,8 @@ it('logs out the device and updates state', function () {
 
     Event::fake();
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -38,8 +38,8 @@ it('swallows API exceptions during logout', function () {
 
     Event::fake();
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',

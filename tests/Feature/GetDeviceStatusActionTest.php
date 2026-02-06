@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\GetDeviceStatusAction;
 use JordanMiguel\Wuz\Data\DeviceStatusData;
 use JordanMiguel\Wuz\Events\DeviceConnected;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
     Http::preventStrayRequests();
@@ -17,8 +17,8 @@ it('returns connected status when device is logged in', function () {
         '*/webhook' => Http::response(['success' => true], 200),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -45,8 +45,8 @@ it('returns QR status when device needs pairing', function () {
         '*/session/qr' => Http::response(['data' => ['QRCode' => 'base64-qr-data']], 200),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -65,8 +65,8 @@ it('updates device connected state in database', function () {
         '*/webhook' => Http::response(['success' => true], 200),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',

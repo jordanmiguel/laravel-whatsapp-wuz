@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class WuzDevice extends Model
 {
     protected $fillable = [
-        'tenant_type',
-        'tenant_id',
+        'owner_type',
+        'owner_id',
         'device_id',
         'name',
         'token',
@@ -34,7 +34,7 @@ class WuzDevice extends Model
         return config('wuz.table_names.devices', 'wuz_devices');
     }
 
-    public function tenant(): MorphTo
+    public function owner(): MorphTo
     {
         return $this->morphTo();
     }

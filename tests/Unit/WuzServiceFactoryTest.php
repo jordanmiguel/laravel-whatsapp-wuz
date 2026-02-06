@@ -3,11 +3,11 @@
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Services\WuzService;
 use JordanMiguel\Wuz\Services\WuzServiceFactory;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('creates a service for a specific device', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Test Device',
         'token' => 'device-token-123',
         'device_id' => 'wuz-1',

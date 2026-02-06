@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use JordanMiguel\Wuz\Contracts\HasWuzDevices as HasWuzDevicesContract;
 use JordanMiguel\Wuz\Traits\HasWuzDevices;
 
-class TestTenant extends Model implements HasWuzDevicesContract
+class TestOwner extends Model implements HasWuzDevicesContract
 {
     use HasWuzDevices;
 
-    protected $table = 'test_tenants';
+    protected $table = 'test_owners';
 
     protected $fillable = ['name'];
 }

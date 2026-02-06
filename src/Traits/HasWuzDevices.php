@@ -10,7 +10,7 @@ trait HasWuzDevices
 {
     public function wuzDevices(): MorphMany
     {
-        return $this->morphMany(WuzDevice::class, 'tenant');
+        return $this->morphMany(WuzDevice::class, 'owner');
     }
 
     public function defaultWuzDevice(): ?WuzDevice

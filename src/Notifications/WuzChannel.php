@@ -51,10 +51,10 @@ class WuzChannel
             return $notifiable->resolveWuzDevice();
         }
 
-        if (method_exists($notifiable, 'resolveWuzTenant')) {
-            $tenant = $notifiable->resolveWuzTenant();
+        if (method_exists($notifiable, 'resolveWuzOwner')) {
+            $owner = $notifiable->resolveWuzOwner();
 
-            return $tenant?->defaultWuzDevice();
+            return $owner?->defaultWuzDevice();
         }
 
         return null;
