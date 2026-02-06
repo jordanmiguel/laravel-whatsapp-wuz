@@ -2,13 +2,20 @@
 
 namespace JordanMiguel\Wuz\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use JordanMiguel\Wuz\Database\Factories\WuzDeviceFactory;
 
 class WuzDevice extends Model
 {
+    use HasFactory;
+
+    protected static function newFactory(): WuzDeviceFactory
+    {
+        return WuzDeviceFactory::new();
+    }
     protected $fillable = [
         'owner_type',
         'owner_id',

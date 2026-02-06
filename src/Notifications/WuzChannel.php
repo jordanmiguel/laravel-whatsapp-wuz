@@ -15,6 +15,10 @@ class WuzChannel
 
     public function send(object $notifiable, Notification $notification): void
     {
+        if (! config('wuz.enabled')) {
+            return;
+        }
+
         if (! method_exists($notification, 'toWuz') && ! method_exists($notification, 'toWhatsApp')) {
             return;
         }
