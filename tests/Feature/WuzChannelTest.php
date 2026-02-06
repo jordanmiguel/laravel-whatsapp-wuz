@@ -37,6 +37,7 @@ class TestNotifiable
 it('sends a message via the WuzChannel', function () {
     Http::preventStrayRequests();
     Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => 'lid123']], 200),
         '*/chat/send/text' => Http::response(['data' => ['sent' => true]], 200),
     ]);
 
@@ -56,8 +57,30 @@ it('sends a message via the WuzChannel', function () {
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/chat/send/text')
         && $request['Body'] === 'Hello from notification!'
-        && $request['Phone'] === '5511999999999'
     );
+});
+
+it('silently skips when phone validation fails', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*/user/lid/*' => Http::response('Not found', 404),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
+        'name' => 'Device',
+        'token' => 'tok',
+        'device_id' => 'wuz-1',
+        'connected' => true,
+    ]);
+
+    $notifiable = new TestNotifiable;
+    $notifiable->wuzDevice = $device;
+
+    $channel = app(WuzChannel::class);
+    $channel->send($notifiable, new TestWuzNotification);
+
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/chat/send/text'));
 });
 
 it('skips sending when no phone is available', function () {

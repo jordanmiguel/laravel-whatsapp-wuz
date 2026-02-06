@@ -3,21 +3,18 @@
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\SendMessageAction;
 use JordanMiguel\Wuz\Data\SendMessageData;
+use JordanMiguel\Wuz\Exceptions\WuzApiException;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
-beforeEach(function () {
+it('sends a text message and stores it', function () {
     Http::preventStrayRequests();
     Http::fake([
         '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => 'lid123']], 200),
         '*/chat/send/text' => Http::response(['data' => ['sent' => true, 'id' => 'msg-1']], 200),
-        '*/chat/send/image' => Http::response(['data' => ['sent' => true]], 200),
-        '*/chat/send/buttons' => Http::response(['data' => ['sent' => true]], 200),
     ]);
-});
 
-it('sends a text message and stores it', function () {
     $owner = TestOwner::create(['name' => 'Test']);
     $device = $owner->wuzDevices()->create([
         'name' => 'Device',
@@ -41,6 +38,12 @@ it('sends a text message and stores it', function () {
 });
 
 it('normalizes phone and resolves JID', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => 'lid123']], 200),
+        '*/chat/send/text' => Http::response(['data' => ['sent' => true, 'id' => 'msg-1']], 200),
+    ]);
+
     $owner = TestOwner::create(['name' => 'Test']);
     $device = $owner->wuzDevices()->create([
         'name' => 'Device',
@@ -55,11 +58,17 @@ it('normalizes phone and resolves JID', function () {
     ));
 
     $phoneJid = WuzPhoneJid::first();
-    expect($phoneJid->phone)->toBe('5511999999999');
+    expect($phoneJid->phone)->toBe('551199999999');
     expect($phoneJid->jid)->toBe('5511@s.whatsapp.net');
 });
 
 it('sends a button message', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => 'lid123']], 200),
+        '*/chat/send/buttons' => Http::response(['data' => ['sent' => true]], 200),
+    ]);
+
     $owner = TestOwner::create(['name' => 'Test']);
     $device = $owner->wuzDevices()->create([
         'name' => 'Device',
@@ -80,3 +89,23 @@ it('sends a button message', function () {
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/chat/send/buttons'));
 });
+
+it('throws when phone is not registered on WhatsApp', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*/user/lid/*' => Http::response('Not found', 404),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
+        'name' => 'Device',
+        'token' => 'tok',
+        'device_id' => 'wuz-1',
+        'connected' => true,
+    ]);
+
+    app(SendMessageAction::class)->handle($device, new SendMessageData(
+        phone: '+441234567890',
+        message: 'Hello',
+    ));
+})->throws(WuzApiException::class);

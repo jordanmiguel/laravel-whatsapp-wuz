@@ -3,45 +3,24 @@
 namespace JordanMiguel\Wuz\Actions;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use JordanMiguel\Wuz\Data\SendMessageData;
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
-use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Services\WuzServiceFactory;
-use JordanMiguel\Wuz\Support\PhoneNormalizer;
 
 class SendMessageAction
 {
     public function __construct(
         private readonly WuzServiceFactory $factory,
+        private readonly ValidatePhoneAction $validatePhone,
     ) {}
 
     public function handle(WuzDevice $device, SendMessageData $data): WuzDeviceMessage
     {
         return DB::transaction(function () use ($device, $data) {
-            $phone = PhoneNormalizer::normalize($data->phone);
             $wuz = $this->factory->make($device);
-
-            $phoneJid = WuzPhoneJid::firstOrCreate(
-                ['phone' => $phone],
-                ['jid' => null, 'lid' => null],
-            );
-
-            if (empty($phoneJid->jid)) {
-                try {
-                    $jidData = $wuz->phoneToJid($phone);
-
-                    if (isset($jidData['data'])) {
-                        $phoneJid->update([
-                            'jid' => $jidData['data']['jid'] ?? null,
-                            'lid' => $jidData['data']['lid'] ?? null,
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Failed to get JID for phone: ' . $phone, ['error' => $e->getMessage()]);
-                }
-            }
+            $validated = $this->validatePhone->handle($wuz, $data->phone);
+            $phone = $validated->phone;
 
             $response = null;
             $messageContent = '';
@@ -81,7 +60,7 @@ class SendMessageAction
 
             return WuzDeviceMessage::create([
                 'wuz_device_id' => $device->id,
-                'chat_jid' => $phoneJid->jid,
+                'chat_jid' => $validated->jid,
                 'sender_jid' => $device->jid,
                 'message' => $messageContent,
                 'metadata' => $response,
