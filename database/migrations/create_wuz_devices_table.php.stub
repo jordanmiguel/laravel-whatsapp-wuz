@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create(config('wuz.table_names.devices', 'wuz_devices'), function (Blueprint $table) {
+            $table->id();
+            $table->string('tenant_type');
+            $table->unsignedBigInteger('tenant_id');
+            $table->string('device_id', 100)->nullable();
+            $table->string('name', 255);
+            $table->text('token')->nullable();
+            $table->boolean('connected')->default(false);
+            $table->string('jid', 255)->nullable();
+            $table->boolean('is_default')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->timestamps();
+
+            $table->index(['tenant_type', 'tenant_id']);
+            $table->index(['tenant_type', 'tenant_id', 'is_default']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists(config('wuz.table_names.devices', 'wuz_devices'));
+    }
+};
