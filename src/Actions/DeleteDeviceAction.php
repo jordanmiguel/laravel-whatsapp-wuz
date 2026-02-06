@@ -22,12 +22,12 @@ class DeleteDeviceAction
 
         DB::transaction(function () use ($device) {
             $wasDefault = $device->is_default;
-            $tenant = $device->tenant;
+            $owner = $device->owner;
 
             $device->delete();
 
-            if ($wasDefault && $tenant) {
-                $nextDevice = $tenant->wuzDevices()->oldest()->first();
+            if ($wasDefault && $owner) {
+                $nextDevice = $owner->wuzDevices()->oldest()->first();
                 $nextDevice?->update(['is_default' => true]);
             }
         });

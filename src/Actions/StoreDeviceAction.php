@@ -15,9 +15,9 @@ class StoreDeviceAction
         private readonly ConnectDeviceAction $connectAction,
     ) {}
 
-    public function handle(Model $tenant, StoreDeviceData $data, ?int $createdBy = null): WuzDevice
+    public function handle(Model $owner, StoreDeviceData $data, ?int $createdBy = null): WuzDevice
     {
-        return DB::transaction(function () use ($tenant, $data, $createdBy) {
+        return DB::transaction(function () use ($owner, $data, $createdBy) {
             $token = 'device-' . uniqid() . time();
 
             $webhookUrl = route('wuz.webhook', ['token' => $token]);
@@ -28,9 +28,9 @@ class StoreDeviceAction
                 webhookUrl: $webhookUrl,
             );
 
-            $isFirst = $tenant->wuzDevices()->count() === 0;
+            $isFirst = $owner->wuzDevices()->count() === 0;
 
-            $device = $tenant->wuzDevices()->create([
+            $device = $owner->wuzDevices()->create([
                 'device_id' => $result['data']['id'] ?? null,
                 'name' => $data->name,
                 'token' => $token,

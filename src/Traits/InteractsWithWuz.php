@@ -13,10 +13,10 @@ trait InteractsWithWuz
 
     public function resolveWuzDevice(): ?WuzDevice
     {
-        $tenant = $this->resolveWuzTenant();
+        $owner = $this->resolveWuzOwner();
 
-        return $tenant?->defaultWuzDevice();
+        return $owner?->defaultWuzDevice();
     }
 
-    abstract public function resolveWuzTenant(): mixed;
+    abstract public function resolveWuzOwner(): mixed;
 }

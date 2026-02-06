@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\ConnectDeviceAction;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('calls session connect on WuzAPI', function () {
     Http::preventStrayRequests();
@@ -10,8 +10,8 @@ it('calls session connect on WuzAPI', function () {
         '*/session/connect' => Http::response(['data' => ['connected' => true]], 200),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok-123',
         'device_id' => 'wuz-1',
@@ -29,8 +29,8 @@ it('swallows exceptions gracefully', function () {
         '*/session/connect' => Http::response('error', 500),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok-123',
         'device_id' => 'wuz-1',

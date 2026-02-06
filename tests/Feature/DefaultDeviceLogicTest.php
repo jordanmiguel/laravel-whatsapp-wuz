@@ -1,79 +1,79 @@
 <?php
 
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('returns null when no default device exists', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
+    $owner = TestOwner::create(['name' => 'Test']);
 
-    expect($tenant->defaultWuzDevice())->toBeNull();
+    expect($owner->defaultWuzDevice())->toBeNull();
 });
 
 it('returns the default device', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Default',
         'token' => 'tok1',
         'is_default' => true,
     ]);
 
-    expect($tenant->defaultWuzDevice()->id)->toBe($device->id);
+    expect($owner->defaultWuzDevice()->id)->toBe($device->id);
 });
 
 it('switches default device in a transaction', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $first = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $first = $owner->wuzDevices()->create([
         'name' => 'First',
         'token' => 'tok1',
         'is_default' => true,
     ]);
-    $second = $tenant->wuzDevices()->create([
+    $second = $owner->wuzDevices()->create([
         'name' => 'Second',
         'token' => 'tok2',
         'is_default' => false,
     ]);
 
-    $tenant->setDefaultWuzDevice($second);
+    $owner->setDefaultWuzDevice($second);
 
     expect($first->fresh()->is_default)->toBeFalse();
     expect($second->fresh()->is_default)->toBeTrue();
-    expect($tenant->defaultWuzDevice()->id)->toBe($second->id);
+    expect($owner->defaultWuzDevice()->id)->toBe($second->id);
 });
 
 it('returns only connected devices', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $owner->wuzDevices()->create([
         'name' => 'Connected',
         'token' => 'tok1',
         'connected' => true,
     ]);
-    $tenant->wuzDevices()->create([
+    $owner->wuzDevices()->create([
         'name' => 'Disconnected',
         'token' => 'tok2',
         'connected' => false,
     ]);
 
-    expect($tenant->connectedWuzDevices()->count())->toBe(1);
-    expect($tenant->connectedWuzDevices()->first()->name)->toBe('Connected');
+    expect($owner->connectedWuzDevices()->count())->toBe(1);
+    expect($owner->connectedWuzDevices()->first()->name)->toBe('Connected');
 });
 
-it('isolates devices between tenants', function () {
-    $tenantA = TestTenant::create(['name' => 'Tenant A']);
-    $tenantB = TestTenant::create(['name' => 'Tenant B']);
+it('isolates devices between owners', function () {
+    $ownerA = TestOwner::create(['name' => 'Owner A']);
+    $ownerB = TestOwner::create(['name' => 'Owner B']);
 
-    $tenantA->wuzDevices()->create(['name' => 'A-Device', 'token' => 'tokA', 'is_default' => true]);
-    $tenantB->wuzDevices()->create(['name' => 'B-Device', 'token' => 'tokB', 'is_default' => true]);
+    $ownerA->wuzDevices()->create(['name' => 'A-Device', 'token' => 'tokA', 'is_default' => true]);
+    $ownerB->wuzDevices()->create(['name' => 'B-Device', 'token' => 'tokB', 'is_default' => true]);
 
-    expect($tenantA->wuzDevices()->count())->toBe(1);
-    expect($tenantB->wuzDevices()->count())->toBe(1);
-    expect($tenantA->defaultWuzDevice()->name)->toBe('A-Device');
-    expect($tenantB->defaultWuzDevice()->name)->toBe('B-Device');
+    expect($ownerA->wuzDevices()->count())->toBe(1);
+    expect($ownerB->wuzDevices()->count())->toBe(1);
+    expect($ownerA->defaultWuzDevice()->name)->toBe('A-Device');
+    expect($ownerB->defaultWuzDevice()->name)->toBe('B-Device');
 });
 
-it('supports multiple devices per tenant', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $tenant->wuzDevices()->create(['name' => 'Device 1', 'token' => 'tok1', 'is_default' => true]);
-    $tenant->wuzDevices()->create(['name' => 'Device 2', 'token' => 'tok2']);
-    $tenant->wuzDevices()->create(['name' => 'Device 3', 'token' => 'tok3']);
+it('supports multiple devices per owner', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $owner->wuzDevices()->create(['name' => 'Device 1', 'token' => 'tok1', 'is_default' => true]);
+    $owner->wuzDevices()->create(['name' => 'Device 2', 'token' => 'tok2']);
+    $owner->wuzDevices()->create(['name' => 'Device 3', 'token' => 'tok3']);
 
-    expect($tenant->wuzDevices()->count())->toBe(3);
+    expect($owner->wuzDevices()->count())->toBe(3);
 });

@@ -55,8 +55,7 @@ class TestCase extends Orchestra
         $migration = include __DIR__ . '/../database/migrations/create_wuz_phone_jids_table.php.stub';
         $migration->up();
 
-        // Create test tenants table
-        $this->app['db']->connection()->getSchemaBuilder()->create('test_tenants', function ($table) {
+        $this->app['db']->connection()->getSchemaBuilder()->create('test_owners', function ($table) {
             $table->id();
             $table->string('name');
             $table->timestamps();

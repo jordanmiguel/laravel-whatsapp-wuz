@@ -1,7 +1,7 @@
 <?php
 
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('uses configurable table name', function () {
     $device = new WuzDevice;
@@ -12,8 +12,8 @@ it('uses configurable table name', function () {
 });
 
 it('stores the token as plain text for webhook lookup', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Test Device',
         'token' => 'device-abc123',
         'device_id' => 'wuz-1',
@@ -27,8 +27,8 @@ it('stores the token as plain text for webhook lookup', function () {
 });
 
 it('casts connected and is_default to boolean', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Test',
         'token' => 'tok',
         'connected' => 1,
@@ -40,13 +40,13 @@ it('casts connected and is_default to boolean', function () {
     expect($device->is_default)->toBeFalse();
 });
 
-it('has morph relationship to tenant', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+it('has morph relationship to owner', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Test Device',
         'token' => 'tok',
     ]);
 
-    expect($device->tenant)->toBeInstanceOf(TestTenant::class);
-    expect($device->tenant->id)->toBe($tenant->id);
+    expect($device->owner)->toBeInstanceOf(TestOwner::class);
+    expect($device->owner->id)->toBe($owner->id);
 });

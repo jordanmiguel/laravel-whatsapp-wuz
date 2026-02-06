@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\DeleteDeviceAction;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
     Http::preventStrayRequests();
@@ -12,8 +12,8 @@ beforeEach(function () {
 });
 
 it('deletes a device from WuzAPI and database', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -21,18 +21,18 @@ it('deletes a device from WuzAPI and database', function () {
 
     app(DeleteDeviceAction::class)->handle($device);
 
-    expect($tenant->wuzDevices()->count())->toBe(0);
+    expect($owner->wuzDevices()->count())->toBe(0);
 });
 
 it('promotes next device to default when deleting the default', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $first = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $first = $owner->wuzDevices()->create([
         'name' => 'First',
         'token' => 'tok1',
         'device_id' => 'wuz-1',
         'is_default' => true,
     ]);
-    $second = $tenant->wuzDevices()->create([
+    $second = $owner->wuzDevices()->create([
         'name' => 'Second',
         'token' => 'tok2',
         'device_id' => 'wuz-2',
@@ -45,8 +45,8 @@ it('promotes next device to default when deleting the default', function () {
 });
 
 it('handles deleting when no remaining devices exist', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Only',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -55,5 +55,5 @@ it('handles deleting when no remaining devices exist', function () {
 
     app(DeleteDeviceAction::class)->handle($device);
 
-    expect($tenant->wuzDevices()->count())->toBe(0);
+    expect($owner->wuzDevices()->count())->toBe(0);
 });

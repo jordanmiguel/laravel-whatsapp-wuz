@@ -8,7 +8,7 @@ use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
 use JordanMiguel\Wuz\Models\WuzCallbackLog;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
     Http::preventStrayRequests();
@@ -16,8 +16,8 @@ beforeEach(function () {
 });
 
 it('logs callbacks and dispatches WebhookReceived event', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'callback-token-123',
         'device_id' => 'wuz-1',
@@ -32,8 +32,8 @@ it('logs callbacks and dispatches WebhookReceived event', function () {
 });
 
 it('handles MESSAGE events and stores device messages', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'msg-token',
         'device_id' => 'wuz-1',
@@ -62,8 +62,8 @@ it('handles MESSAGE events and stores device messages', function () {
 });
 
 it('handles DISCONNECTED events', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'disc-token',
         'device_id' => 'wuz-1',
@@ -77,8 +77,8 @@ it('handles DISCONNECTED events', function () {
 });
 
 it('handles LOGGED_OUT events and clears JID', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'logout-token',
         'device_id' => 'wuz-1',
@@ -101,8 +101,8 @@ it('ignores callbacks for unknown tokens', function () {
 });
 
 it('handles extended text messages', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'ext-token',
         'device_id' => 'wuz-1',

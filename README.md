@@ -1,6 +1,29 @@
 # Laravel WhatsApp Wuz
 
-Laravel package for WhatsApp device management via [WuzAPI](https://github.com/asternic/wuzapi) with multi-tenant, multi-device support.
+A Laravel package for managing WhatsApp devices through [WuzAPI](https://github.com/asternic/wuzapi). Connect multiple WhatsApp numbers to your application with multi-owner, multi-device support, Laravel notifications, and automatic webhook handling.
+
+---
+
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Usage](#usage)
+- [Notification Channel](#notification-channel)
+- [Webhooks & Events](#webhooks--events)
+- [Multi-Device Management](#multi-device-management)
+- [Facade](#facade)
+- [Testing](#testing)
+- [License](#license)
+
+## Requirements
+
+- PHP 8.2+
+- Laravel 11 or 12
+- A running [WuzAPI](https://github.com/asternic/wuzapi) instance
 
 ## Installation
 
@@ -8,7 +31,7 @@ Laravel package for WhatsApp device management via [WuzAPI](https://github.com/a
 composer require jordanmiguel/laravel-whatsapp-wuz
 ```
 
-Publish the config and migrations:
+Publish the config and migrations, then run them:
 
 ```bash
 php artisan vendor:publish --tag="laravel-whatsapp-wuz-config"
@@ -18,7 +41,7 @@ php artisan migrate
 
 ## Configuration
 
-Add to your `.env`:
+Add these variables to your `.env` file:
 
 ```env
 WUZ_ENABLED=true
@@ -28,11 +51,19 @@ WUZ_DEFAULT_COUNTRY_CODE=55
 WUZ_DOWNLOAD_MEDIA=false
 ```
 
-Full config in `config/wuz.php` — table names, webhook path, and middleware are all customizable.
+| Variable | Description |
+|----------|-------------|
+| `WUZ_ENABLED` | Enable or disable the package globally |
+| `WUZ_API_URL` | URL of your WuzAPI instance |
+| `WUZ_ADMIN_TOKEN` | Admin token for managing devices via the WuzAPI |
+| `WUZ_DEFAULT_COUNTRY_CODE` | Default country code for phone number normalization |
+| `WUZ_DOWNLOAD_MEDIA` | Automatically download media from incoming messages |
 
-## Setup
+See `config/wuz.php` for additional options like custom table names, webhook path, and middleware.
 
-Add the trait and interface to your tenant model (e.g., `Clinic`, `Organization`):
+## Quick Start
+
+**1. Add the trait and interface to your owner model** (any Eloquent model that owns WhatsApp devices):
 
 ```php
 use JordanMiguel\Wuz\Contracts\HasWuzDevices as HasWuzDevicesContract;
@@ -44,24 +75,20 @@ class Clinic extends Model implements HasWuzDevicesContract
 }
 ```
 
-## Usage
-
-### Create a Device
+**2. Create a device:**
 
 ```php
 use JordanMiguel\Wuz\Actions\StoreDeviceAction;
 use JordanMiguel\Wuz\Data\StoreDeviceData;
 
 $device = app(StoreDeviceAction::class)->handle(
-    tenant: $clinic,
+    owner: $clinic,
     data: new StoreDeviceData(name: 'Reception Phone'),
     createdBy: auth()->id(),
 );
 ```
 
-The first device per tenant is automatically set as default.
-
-### Check Device Status / Get QR Code
+**3. Get the QR code and scan it with WhatsApp:**
 
 ```php
 use JordanMiguel\Wuz\Actions\GetDeviceStatusAction;
@@ -71,7 +98,87 @@ $status = app(GetDeviceStatusAction::class)->handle($device);
 // $status->qr_code  => base64 QR data (when status is 'qr')
 ```
 
-### Send a Message
+**4. Send a message:**
+
+```php
+use JordanMiguel\Wuz\Actions\SendMessageAction;
+use JordanMiguel\Wuz\Data\SendMessageData;
+
+app(SendMessageAction::class)->handle($device, new SendMessageData(
+    phone: '5511999999999',
+    type: 'text',
+    message: 'Hello from Laravel!',
+));
+```
+
+## Core Concepts
+
+### Owners & Devices
+
+Any Eloquent model can own WhatsApp devices by implementing the `HasWuzDevices` interface. This uses a polymorphic relationship, so a `Clinic`, `Organization`, `Team`, or `User` model can all own devices independently.
+
+Each owner can have multiple devices. One device per owner is always marked as the **default** — this is the device used when sending notifications.
+
+### Device Lifecycle
+
+```
+Create → Connect → Scan QR → Connected → Send/Receive Messages
+```
+
+1. **Create** — Registers a new device with WuzAPI and stores it in your database
+2. **Connect** — Initiates the connection (happens automatically on create)
+3. **Scan QR** — Use `GetDeviceStatusAction` to retrieve the QR code for the user to scan with their WhatsApp mobile app
+4. **Connected** — Once scanned, the device is connected and ready to send/receive messages
+5. **Send/Receive** — Send messages via `SendMessageAction`, receive via webhooks
+
+## Usage
+
+### Managing Devices
+
+#### Create a Device
+
+```php
+use JordanMiguel\Wuz\Actions\StoreDeviceAction;
+use JordanMiguel\Wuz\Data\StoreDeviceData;
+
+$device = app(StoreDeviceAction::class)->handle(
+    owner: $clinic,
+    data: new StoreDeviceData(name: 'Reception Phone'),
+    createdBy: auth()->id(),
+);
+```
+
+The first device per owner is automatically set as default.
+
+#### Check Device Status / Get QR Code
+
+```php
+use JordanMiguel\Wuz\Actions\GetDeviceStatusAction;
+
+$status = app(GetDeviceStatusAction::class)->handle($device);
+// $status->status   => 'connected' | 'qr' | 'disconnected'
+// $status->qr_code  => base64 QR data (when status is 'qr')
+```
+
+#### Disconnect a Device
+
+```php
+use JordanMiguel\Wuz\Actions\DisconnectDeviceAction;
+
+app(DisconnectDeviceAction::class)->handle($device);
+```
+
+#### Delete a Device
+
+```php
+use JordanMiguel\Wuz\Actions\DeleteDeviceAction;
+
+app(DeleteDeviceAction::class)->handle($device);
+```
+
+When you delete the default device, the next oldest device is automatically promoted to default.
+
+### Sending Messages
 
 ```php
 use JordanMiguel\Wuz\Actions\SendMessageAction;
@@ -84,21 +191,13 @@ $message = app(SendMessageAction::class)->handle($device, new SendMessageData(
 ));
 ```
 
-Supported types: `text`, `image`, `video`, `document`, `button`.
-
-### Disconnect / Delete
-
-```php
-use JordanMiguel\Wuz\Actions\DisconnectDeviceAction;
-use JordanMiguel\Wuz\Actions\DeleteDeviceAction;
-
-app(DisconnectDeviceAction::class)->handle($device);
-app(DeleteDeviceAction::class)->handle($device); // promotes next device to default
-```
+Supported message types: `text`, `image`, `video`, `document`, `button`.
 
 ## Notification Channel
 
-Send WhatsApp messages via Laravel's notification system:
+Send WhatsApp messages through Laravel's notification system.
+
+### Define a Notification
 
 ```php
 use JordanMiguel\Wuz\Notifications\WuzMessage;
@@ -117,7 +216,9 @@ class AppointmentReminder extends Notification
 }
 ```
 
-The notifiable model needs the `InteractsWithWuz` trait:
+### Set Up the Notifiable Model
+
+The notifiable model needs the `InteractsWithWuz` trait to resolve which device should send the message:
 
 ```php
 use JordanMiguel\Wuz\Traits\InteractsWithWuz;
@@ -131,24 +232,32 @@ class ClientProfile extends Model
         return $this->phone;
     }
 
-    public function resolveWuzTenant(): mixed
+    public function resolveWuzOwner(): mixed
     {
         return $this->clinic;
     }
 }
 ```
 
-## Webhooks
+The channel resolves the device by calling `resolveWuzOwner()` on the notifiable, then uses that owner's default device to send the message.
 
-Incoming WhatsApp events are received at `POST /api/wuz/webhook/{token}` (configurable). The package handles:
+## Webhooks & Events
 
-- **Message** — stores incoming messages, dispatches `MessageReceived`
-- **Disconnected** — updates device state, dispatches `DeviceDisconnected`
-- **LoggedOut** — clears JID, dispatches `DeviceDisconnected`
+Incoming WhatsApp events are received at `POST /api/wuz/webhook/{token}` (configurable in `config/wuz.php`).
 
-All callbacks dispatch `WebhookReceived` and are logged in `wuz_callback_logs`.
+### Handled Events
+
+| Webhook Event | What Happens | Event Dispatched |
+|---------------|--------------|------------------|
+| **Message** | Stores the incoming message in `wuz_device_messages` | `MessageReceived` |
+| **Disconnected** | Updates the device's connected state | `DeviceDisconnected` |
+| **LoggedOut** | Clears the device's JID and marks as disconnected | `DeviceDisconnected` |
+
+All callbacks also dispatch a `WebhookReceived` event and are logged in the `wuz_callback_logs` table.
 
 ### Listening to Events
+
+Register listeners in your `EventServiceProvider` or use Laravel's event discovery:
 
 ```php
 use JordanMiguel\Wuz\Events\MessageReceived;
@@ -164,16 +273,18 @@ class HandleIncomingMessage
 }
 ```
 
-## Multi-Device
+## Multi-Device Management
+
+Each owner can have multiple WhatsApp devices. The package enforces that exactly one device per owner is the default.
 
 | Rule | Behavior |
 |------|----------|
-| Multiple devices per tenant | Supported |
-| One default per tenant | Enforced via `is_default` flag |
+| Multiple devices per owner | Supported via polymorphic relationship |
+| One default per owner | Enforced via `is_default` flag |
 | First device auto-default | Handled by `StoreDeviceAction` |
 | Delete promotes next | Handled by `DeleteDeviceAction` |
-| Explicit switch | `$tenant->setDefaultWuzDevice($device)` |
-| Notification picks default | `WuzChannel` resolves via tenant |
+| Explicit switch | `$owner->setDefaultWuzDevice($device)` |
+| Notification routing | `WuzChannel` uses the owner's default device |
 
 ## Facade
 
@@ -181,12 +292,12 @@ class HandleIncomingMessage
 use JordanMiguel\Wuz\Facades\Wuz;
 
 $service = Wuz::make($device); // device-scoped WuzService
-$admin = Wuz::admin();         // admin-scoped WuzService
+$admin   = Wuz::admin();       // admin-scoped WuzService
 ```
 
 ## Testing
 
-Mock the WuzAPI in your tests:
+Mock the WuzAPI in your application tests using Laravel's HTTP fakes:
 
 ```php
 Http::fake([

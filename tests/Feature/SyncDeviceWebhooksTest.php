@@ -2,11 +2,11 @@
 
 use JordanMiguel\Wuz\Actions\SyncDeviceWebhooksAction;
 use JordanMiguel\Wuz\Models\WuzDeviceWebhook;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('creates webhooks for a device', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -21,8 +21,8 @@ it('creates webhooks for a device', function () {
 });
 
 it('updates existing webhooks instead of creating duplicates', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',

@@ -5,7 +5,7 @@ use JordanMiguel\Wuz\Actions\SendMessageAction;
 use JordanMiguel\Wuz\Data\SendMessageData;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
     Http::preventStrayRequests();
@@ -18,8 +18,8 @@ beforeEach(function () {
 });
 
 it('sends a text message and stores it', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -41,8 +41,8 @@ it('sends a text message and stores it', function () {
 });
 
 it('normalizes phone and resolves JID', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -60,8 +60,8 @@ it('normalizes phone and resolves JID', function () {
 });
 
 it('sends a button message', function () {
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',

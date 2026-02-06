@@ -1,11 +1,11 @@
 {
     "name": "jordanmiguel/laravel-whatsapp-wuz",
-    "description": "Laravel package for WhatsApp device management via WuzAPI with multi-tenant support",
+    "description": "Laravel package for WhatsApp device management via WuzAPI with multi-owner support",
     "keywords": [
         "laravel",
         "whatsapp",
         "wuzapi",
-        "multi-tenant",
+        "multi-owner",
         "notifications"
     ],
     "homepage": "https://github.com/jordanmiguel/laravel-whatsapp-wuz",

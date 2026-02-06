@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Notifications\WuzChannel;
 use JordanMiguel\Wuz\Notifications\WuzMessage;
-use JordanMiguel\Wuz\Tests\Fixtures\TestTenant;
+use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 class TestWuzNotification extends Notification
 {
@@ -40,8 +40,8 @@ it('sends a message via the WuzChannel', function () {
         '*/chat/send/text' => Http::response(['data' => ['sent' => true]], 200),
     ]);
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',
@@ -79,8 +79,8 @@ it('skips sending when no phone is available', function () {
 it('skips sending when device is not connected', function () {
     Http::preventStrayRequests();
 
-    $tenant = TestTenant::create(['name' => 'Test']);
-    $device = $tenant->wuzDevices()->create([
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = $owner->wuzDevices()->create([
         'name' => 'Device',
         'token' => 'tok',
         'device_id' => 'wuz-1',

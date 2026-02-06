@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create(config('wuz.table_names.devices', 'wuz_devices'), function (Blueprint $table) {
             $table->id();
-            $table->string('tenant_type');
-            $table->unsignedBigInteger('tenant_id');
+            $table->string('owner_type');
+            $table->unsignedBigInteger('owner_id');
             $table->string('device_id', 100)->nullable();
             $table->string('name', 255);
             $table->text('token')->nullable();
@@ -21,8 +21,8 @@ return new class extends Migration
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
 
-            $table->index(['tenant_type', 'tenant_id']);
-            $table->index(['tenant_type', 'tenant_id', 'is_default']);
+            $table->index(['owner_type', 'owner_id']);
+            $table->index(['owner_type', 'owner_id', 'is_default']);
         });
     }
 
