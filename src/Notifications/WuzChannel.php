@@ -4,16 +4,14 @@ namespace JordanMiguel\Wuz\Notifications;
 
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
-use JordanMiguel\Wuz\Actions\ValidatePhoneAction;
-use JordanMiguel\Wuz\Exceptions\WuzApiException;
+use JordanMiguel\Wuz\Actions\SendMessageAction;
+use JordanMiguel\Wuz\Data\SendMessageData;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Services\WuzServiceFactory;
 
 class WuzChannel
 {
     public function __construct(
-        private readonly WuzServiceFactory $factory,
-        private readonly ValidatePhoneAction $validatePhone,
+        private readonly SendMessageAction $sendMessage,
     ) {}
 
     public function send(object $notifiable, Notification $notification): void
@@ -48,20 +46,17 @@ class WuzChannel
             ? $notification->toWuz($notifiable)
             : $notification->toWhatsApp($notifiable);
 
-        $wuz = $this->factory->make($device);
-
         try {
-            $validated = $this->validatePhone->handle($wuz, $phone);
-        } catch (WuzApiException $e) {
-            Log::error('WuzChannel: phone validation failed', [
+            $this->sendMessage->handle(
+                $device,
+                new SendMessageData(phone: $phone, message: $message->content),
+            );
+        } catch (\Throwable $e) {
+            Log::error('WuzChannel: failed to send message', [
                 'phone' => $phone,
                 'error' => $e->getMessage(),
             ]);
-
-            return;
         }
-
-        $wuz->sendMessageText($validated->phone, $message->content);
     }
 
     private function resolveDevice(object $notifiable): ?WuzDevice

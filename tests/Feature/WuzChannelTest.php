@@ -3,6 +3,7 @@
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Models\WuzDevice;
+use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Notifications\WuzChannel;
 use JordanMiguel\Wuz\Notifications\WuzMessage;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
@@ -58,6 +59,11 @@ it('sends a message via the WuzChannel', function () {
     Http::assertSent(fn ($request) => str_contains($request->url(), '/chat/send/text')
         && $request['Body'] === 'Hello from notification!'
     );
+
+    $message = WuzDeviceMessage::where('wuz_device_id', $device->id)->first();
+    expect($message)->not->toBeNull()
+        ->and($message->message)->toBe('Hello from notification!')
+        ->and($message->type)->toBe('text');
 });
 
 it('silently skips when phone validation fails', function () {
