@@ -7,11 +7,7 @@ use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('creates a service for a specific device', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Test Device',
-        'token' => 'device-token-123',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'device-token-123']);
 
     $factory = new WuzServiceFactory;
     $service = $factory->make($device);

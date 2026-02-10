@@ -26,7 +26,8 @@
     },
     "autoload": {
         "psr-4": {
-            "JordanMiguel\\Wuz\\": "src/"
+            "JordanMiguel\\Wuz\\": "src/",
+            "JordanMiguel\\Wuz\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {

@@ -2,7 +2,6 @@
 
 namespace JordanMiguel\Wuz\Tests;
 
-use Illuminate\Database\Eloquent\Factories\Factory;
 use JordanMiguel\Wuz\WuzServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 

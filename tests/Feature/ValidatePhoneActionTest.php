@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\ValidatePhoneAction;
 use JordanMiguel\Wuz\Data\ValidatedPhone;
 use JordanMiguel\Wuz\Exceptions\WuzApiException;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Services\WuzService;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
@@ -15,12 +16,7 @@ beforeEach(function () {
 function makeWuzService(): WuzService
 {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     return new WuzService(
         apiUrl: config('wuz.api_url'),

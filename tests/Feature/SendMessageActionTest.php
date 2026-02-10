@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\SendMessageAction;
 use JordanMiguel\Wuz\Data\SendMessageData;
 use JordanMiguel\Wuz\Exceptions\WuzApiException;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
@@ -16,13 +17,7 @@ it('sends a text message and stores it', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-        'jid' => 'my@jid',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     $action = app(SendMessageAction::class);
     $message = $action->handle($device, new SendMessageData(
@@ -45,12 +40,7 @@ it('normalizes phone and resolves JID', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     app(SendMessageAction::class)->handle($device, new SendMessageData(
         phone: '011999999999',
@@ -70,12 +60,7 @@ it('sends a button message', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     $message = app(SendMessageAction::class)->handle($device, new SendMessageData(
         phone: '5511999999999',
@@ -97,12 +82,7 @@ it('throws when phone is not registered on WhatsApp', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     app(SendMessageAction::class)->handle($device, new SendMessageData(
         phone: '+441234567890',

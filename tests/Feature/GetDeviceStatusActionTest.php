@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\GetDeviceStatusAction;
 use JordanMiguel\Wuz\Data\DeviceStatusData;
 use JordanMiguel\Wuz\Events\DeviceConnected;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
@@ -18,12 +19,7 @@ it('returns connected status when device is logged in', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => false,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     Event::fake();
 
@@ -46,11 +42,7 @@ it('returns QR status when device needs pairing', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $action = app(GetDeviceStatusAction::class);
     $result = $action->handle($device);
@@ -66,12 +58,7 @@ it('updates device connected state in database', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => false,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     Event::fake();
 

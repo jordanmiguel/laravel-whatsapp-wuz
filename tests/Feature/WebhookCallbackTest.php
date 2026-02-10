@@ -7,6 +7,7 @@ use JordanMiguel\Wuz\Events\DeviceDisconnected;
 use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
 use JordanMiguel\Wuz\Models\WuzCallbackLog;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
@@ -17,11 +18,7 @@ beforeEach(function () {
 
 it('logs callbacks and dispatches WebhookReceived event', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'callback-token-123',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'callback-token-123']);
 
     $action = app(HandleWebhookCallbackAction::class);
     $action->handle('callback-token-123', ['type' => 'Receipt'], '127.0.0.1', 'TestAgent');
@@ -33,11 +30,7 @@ it('logs callbacks and dispatches WebhookReceived event', function () {
 
 it('handles MESSAGE events and stores device messages', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'msg-token',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'msg-token']);
 
     $payload = [
         'type' => 'Message',
@@ -63,12 +56,7 @@ it('handles MESSAGE events and stores device messages', function () {
 
 it('handles DISCONNECTED events', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'disc-token',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create(['token' => 'disc-token']);
 
     app(HandleWebhookCallbackAction::class)->handle('disc-token', ['type' => 'Disconnected']);
 
@@ -78,13 +66,7 @@ it('handles DISCONNECTED events', function () {
 
 it('handles LOGGED_OUT events and clears JID', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'logout-token',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-        'jid' => '5511@s.whatsapp.net',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create(['token' => 'logout-token']);
 
     app(HandleWebhookCallbackAction::class)->handle('logout-token', ['type' => 'LoggedOut']);
 
@@ -102,11 +84,7 @@ it('ignores callbacks for unknown tokens', function () {
 
 it('handles extended text messages', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'ext-token',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'ext-token']);
 
     $payload = [
         'type' => 'Message',

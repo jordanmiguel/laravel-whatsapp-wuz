@@ -1,16 +1,13 @@
 <?php
 
 use JordanMiguel\Wuz\Actions\SyncDeviceWebhooksAction;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzDeviceWebhook;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('creates webhooks for a device', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     app(SyncDeviceWebhooksAction::class)->handle($device, [
         ['event' => 'All', 'url' => 'http://example.com/hook', 'status' => true],
@@ -22,11 +19,7 @@ it('creates webhooks for a device', function () {
 
 it('updates existing webhooks instead of creating duplicates', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     app(SyncDeviceWebhooksAction::class)->handle($device, [
         ['event' => 'All', 'url' => 'http://old.com/hook', 'status' => true],

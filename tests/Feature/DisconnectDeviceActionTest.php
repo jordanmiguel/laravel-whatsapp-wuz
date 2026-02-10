@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\DisconnectDeviceAction;
 use JordanMiguel\Wuz\Events\DeviceDisconnected;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('logs out the device and updates state', function () {
@@ -15,13 +16,7 @@ it('logs out the device and updates state', function () {
     Event::fake();
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-        'jid' => '5511@s.whatsapp.net',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     app(DisconnectDeviceAction::class)->handle($device);
 
@@ -39,12 +34,7 @@ it('swallows API exceptions during logout', function () {
     Event::fake();
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     app(DisconnectDeviceAction::class)->handle($device);
 

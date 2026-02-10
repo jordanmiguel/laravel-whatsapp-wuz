@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\DeleteDeviceAction;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
@@ -13,11 +14,7 @@ beforeEach(function () {
 
 it('deletes a device from WuzAPI and database', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     app(DeleteDeviceAction::class)->handle($device);
 
@@ -26,18 +23,8 @@ it('deletes a device from WuzAPI and database', function () {
 
 it('promotes next device to default when deleting the default', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $first = $owner->wuzDevices()->create([
-        'name' => 'First',
-        'token' => 'tok1',
-        'device_id' => 'wuz-1',
-        'is_default' => true,
-    ]);
-    $second = $owner->wuzDevices()->create([
-        'name' => 'Second',
-        'token' => 'tok2',
-        'device_id' => 'wuz-2',
-        'is_default' => false,
-    ]);
+    $first = WuzDevice::factory()->for($owner, 'owner')->default()->create();
+    $second = WuzDevice::factory()->for($owner, 'owner')->create();
 
     app(DeleteDeviceAction::class)->handle($first);
 
@@ -46,12 +33,7 @@ it('promotes next device to default when deleting the default', function () {
 
 it('handles deleting when no remaining devices exist', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Only',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'is_default' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->default()->create();
 
     app(DeleteDeviceAction::class)->handle($device);
 

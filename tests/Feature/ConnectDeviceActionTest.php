@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\ConnectDeviceAction;
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('calls session connect on WuzAPI', function () {
@@ -11,11 +12,7 @@ it('calls session connect on WuzAPI', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok-123',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $action = app(ConnectDeviceAction::class);
     $action->handle($device);
@@ -30,11 +27,7 @@ it('swallows exceptions gracefully', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok-123',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $action = app(ConnectDeviceAction::class);
     $action->handle($device);

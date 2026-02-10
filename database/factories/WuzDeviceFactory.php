@@ -12,15 +12,11 @@ class WuzDeviceFactory extends Factory
     public function definition(): array
     {
         return [
-            'owner_type' => 'App\\Models\\User',
-            'owner_id' => 1,
             'device_id' => $this->faker->uuid(),
             'name' => $this->faker->word() . ' Device',
             'token' => $this->faker->sha256(),
             'connected' => false,
-            'jid' => null,
             'is_default' => false,
-            'created_by' => null,
         ];
     }
 

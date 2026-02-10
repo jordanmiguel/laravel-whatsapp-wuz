@@ -43,12 +43,7 @@ it('sends a message via the WuzChannel', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     $notifiable = new TestNotifiable;
     $notifiable->wuzDevice = $device;
@@ -73,12 +68,7 @@ it('silently skips when phone validation fails', function () {
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     $notifiable = new TestNotifiable;
     $notifiable->wuzDevice = $device;
@@ -109,12 +99,7 @@ it('skips sending when device is not connected', function () {
     Http::preventStrayRequests();
 
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Device',
-        'token' => 'tok',
-        'device_id' => 'wuz-1',
-        'connected' => false,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $notifiable = new TestNotifiable;
     $notifiable->wuzDevice = $device;

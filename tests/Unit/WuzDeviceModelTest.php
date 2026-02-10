@@ -13,11 +13,7 @@ it('uses configurable table name', function () {
 
 it('stores the token as plain text for webhook lookup', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Test Device',
-        'token' => 'device-abc123',
-        'device_id' => 'wuz-1',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'device-abc123']);
 
     $device->refresh();
     expect($device->token)->toBe('device-abc123');
@@ -28,9 +24,7 @@ it('stores the token as plain text for webhook lookup', function () {
 
 it('casts connected and is_default to boolean', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Test',
-        'token' => 'tok',
+    $device = WuzDevice::factory()->for($owner, 'owner')->create([
         'connected' => 1,
         'is_default' => 0,
     ]);
@@ -42,10 +36,7 @@ it('casts connected and is_default to boolean', function () {
 
 it('has morph relationship to owner', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Test Device',
-        'token' => 'tok',
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     expect($device->owner)->toBeInstanceOf(TestOwner::class);
     expect($device->owner->id)->toBe($owner->id);

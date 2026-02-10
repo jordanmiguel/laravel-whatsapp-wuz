@@ -1,5 +1,6 @@
 <?php
 
+use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 it('returns null when no default device exists', function () {
@@ -10,27 +11,15 @@ it('returns null when no default device exists', function () {
 
 it('returns the default device', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $device = $owner->wuzDevices()->create([
-        'name' => 'Default',
-        'token' => 'tok1',
-        'is_default' => true,
-    ]);
+    $device = WuzDevice::factory()->for($owner, 'owner')->default()->create();
 
     expect($owner->defaultWuzDevice()->id)->toBe($device->id);
 });
 
 it('switches default device in a transaction', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $first = $owner->wuzDevices()->create([
-        'name' => 'First',
-        'token' => 'tok1',
-        'is_default' => true,
-    ]);
-    $second = $owner->wuzDevices()->create([
-        'name' => 'Second',
-        'token' => 'tok2',
-        'is_default' => false,
-    ]);
+    $first = WuzDevice::factory()->for($owner, 'owner')->default()->create();
+    $second = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $owner->setDefaultWuzDevice($second);
 
@@ -41,16 +30,8 @@ it('switches default device in a transaction', function () {
 
 it('returns only connected devices', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $owner->wuzDevices()->create([
-        'name' => 'Connected',
-        'token' => 'tok1',
-        'connected' => true,
-    ]);
-    $owner->wuzDevices()->create([
-        'name' => 'Disconnected',
-        'token' => 'tok2',
-        'connected' => false,
-    ]);
+    WuzDevice::factory()->for($owner, 'owner')->connected()->create(['name' => 'Connected']);
+    WuzDevice::factory()->for($owner, 'owner')->create(['name' => 'Disconnected']);
 
     expect($owner->connectedWuzDevices()->count())->toBe(1);
     expect($owner->connectedWuzDevices()->first()->name)->toBe('Connected');
@@ -60,8 +41,8 @@ it('isolates devices between owners', function () {
     $ownerA = TestOwner::create(['name' => 'Owner A']);
     $ownerB = TestOwner::create(['name' => 'Owner B']);
 
-    $ownerA->wuzDevices()->create(['name' => 'A-Device', 'token' => 'tokA', 'is_default' => true]);
-    $ownerB->wuzDevices()->create(['name' => 'B-Device', 'token' => 'tokB', 'is_default' => true]);
+    WuzDevice::factory()->for($ownerA, 'owner')->default()->create(['name' => 'A-Device']);
+    WuzDevice::factory()->for($ownerB, 'owner')->default()->create(['name' => 'B-Device']);
 
     expect($ownerA->wuzDevices()->count())->toBe(1);
     expect($ownerB->wuzDevices()->count())->toBe(1);
@@ -71,9 +52,9 @@ it('isolates devices between owners', function () {
 
 it('supports multiple devices per owner', function () {
     $owner = TestOwner::create(['name' => 'Test']);
-    $owner->wuzDevices()->create(['name' => 'Device 1', 'token' => 'tok1', 'is_default' => true]);
-    $owner->wuzDevices()->create(['name' => 'Device 2', 'token' => 'tok2']);
-    $owner->wuzDevices()->create(['name' => 'Device 3', 'token' => 'tok3']);
+    WuzDevice::factory()->for($owner, 'owner')->default()->create();
+    WuzDevice::factory()->for($owner, 'owner')->create();
+    WuzDevice::factory()->for($owner, 'owner')->create();
 
     expect($owner->wuzDevices()->count())->toBe(3);
 });
