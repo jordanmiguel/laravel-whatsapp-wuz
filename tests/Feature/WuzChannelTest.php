@@ -61,7 +61,7 @@ it('sends a message via the WuzChannel', function () {
         ->and($message->type)->toBe('text');
 });
 
-it('silently skips when phone validation fails', function () {
+it('throws when phone validation fails so NotificationFailed fires', function () {
     Http::preventStrayRequests();
     Http::fake([
         '*/user/lid/*' => Http::response('Not found', 404),
@@ -74,9 +74,8 @@ it('silently skips when phone validation fails', function () {
     $notifiable->wuzDevice = $device;
 
     $channel = app(WuzChannel::class);
-    $channel->send($notifiable, new TestWuzNotification);
-
-    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/chat/send/text'));
+    expect(fn () => $channel->send($notifiable, new TestWuzNotification))
+        ->toThrow(\JordanMiguel\Wuz\Exceptions\WuzApiException::class);
 });
 
 it('skips sending when no phone is available', function () {

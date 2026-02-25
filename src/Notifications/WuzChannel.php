@@ -46,17 +46,10 @@ class WuzChannel
             ? $notification->toWuz($notifiable)
             : $notification->toWhatsApp($notifiable);
 
-        try {
-            $this->sendMessage->handle(
-                $device,
-                new SendMessageData(phone: $phone, message: $message->content),
-            );
-        } catch (\Throwable $e) {
-            Log::error('WuzChannel: failed to send message', [
-                'phone' => $phone,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->sendMessage->handle(
+            $device,
+            new SendMessageData(phone: $phone, message: $message->content),
+        );
     }
 
     private function resolveDevice(object $notifiable): ?WuzDevice
