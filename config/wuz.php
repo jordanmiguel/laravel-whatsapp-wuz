@@ -11,6 +11,11 @@ return [
         'middleware' => [],
     ],
 
+    'debug' => [
+        'enabled' => env('WUZ_DEBUG', false),
+        'to' => env('WUZ_DEBUG_TO'),
+    ],
+
     'phone' => [
         'default_country_code' => env('WUZ_DEFAULT_COUNTRY_CODE', '55'),
     ],

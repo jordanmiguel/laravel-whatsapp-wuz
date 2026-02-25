@@ -1,5 +1,10 @@
 # Laravel WhatsApp Wuz
 
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/jordanmiguel/laravel-whatsapp-wuz.svg?style=flat-square)](https://packagist.org/packages/jordanmiguel/laravel-whatsapp-wuz)
+[![Total Downloads](https://img.shields.io/packagist/dt/jordanmiguel/laravel-whatsapp-wuz.svg?style=flat-square)](https://packagist.org/packages/jordanmiguel/laravel-whatsapp-wuz)
+[![License](https://img.shields.io/packagist/l/jordanmiguel/laravel-whatsapp-wuz.svg?style=flat-square)](https://packagist.org/packages/jordanmiguel/laravel-whatsapp-wuz)
+[![Buy me a coffee](https://img.shields.io/badge/donate-PayPal-blue.svg?style=flat-square)](https://www.paypal.com/donate/?hosted_button_id=6PAXAFGESHQDY)
+
 A Laravel package for managing WhatsApp devices through [WuzAPI](https://github.com/asternic/wuzapi). Connect multiple WhatsApp numbers to your application with multi-owner, multi-device support, Laravel notifications, and automatic webhook handling.
 
 ---
@@ -49,6 +54,8 @@ WUZ_API_URL=http://localhost:8080
 WUZ_ADMIN_TOKEN=your-admin-token
 WUZ_DEFAULT_COUNTRY_CODE=55
 WUZ_DOWNLOAD_MEDIA=false
+WUZ_DEBUG=false
+WUZ_DEBUG_TO=
 ```
 
 | Variable | Description |
@@ -58,8 +65,17 @@ WUZ_DOWNLOAD_MEDIA=false
 | `WUZ_ADMIN_TOKEN` | Admin token for managing devices via the WuzAPI |
 | `WUZ_DEFAULT_COUNTRY_CODE` | Default country code for phone number normalization |
 | `WUZ_DOWNLOAD_MEDIA` | Automatically download media from incoming messages |
+| `WUZ_DEBUG` | Enable debug mode — redirects or skips all outgoing messages |
+| `WUZ_DEBUG_TO` | Phone number to redirect all messages to (leave empty to log-only) |
 
 See `config/wuz.php` for additional options like custom table names, webhook path, and middleware.
+
+## Debug Mode
+
+When `WUZ_DEBUG=true`, all outgoing messages are intercepted before sending. This lets you test the full pipeline in development/staging without messaging real users.
+
+- **With `WUZ_DEBUG_TO` set**: All messages are redirected to that phone number, going through the same validation and sending pipeline.
+- **With `WUZ_DEBUG_TO` empty**: Messages are logged via `Log::info()` and skipped entirely — no API call, no database record.
 
 ## Quick Start
 

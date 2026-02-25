@@ -3,6 +3,7 @@
 namespace JordanMiguel\Wuz\Actions;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use JordanMiguel\Wuz\Data\SendMessageData;
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzDeviceMessage;
@@ -15,8 +16,32 @@ class SendMessageAction
         private readonly ValidatePhoneAction $validatePhone,
     ) {}
 
-    public function handle(WuzDevice $device, SendMessageData $data): WuzDeviceMessage
+    public function handle(WuzDevice $device, SendMessageData $data): ?WuzDeviceMessage
     {
+        if (config('wuz.debug.enabled')) {
+            $debugTo = config('wuz.debug.to');
+
+            if (empty($debugTo)) {
+                Log::info('Wuz debug: message skipped', [
+                    'phone' => $data->phone,
+                    'type' => $data->type,
+                    'message' => $data->message,
+                ]);
+
+                return null;
+            }
+
+            $data = new SendMessageData(
+                phone: $debugTo,
+                type: $data->type,
+                message: $data->message,
+                caption: $data->caption,
+                media: $data->media,
+                buttons: $data->buttons,
+                link_preview: $data->link_preview,
+            );
+        }
+
         return DB::transaction(function () use ($device, $data) {
             $wuz = $this->factory->make($device);
             $validated = $this->validatePhone->handle($wuz, $data->phone);
