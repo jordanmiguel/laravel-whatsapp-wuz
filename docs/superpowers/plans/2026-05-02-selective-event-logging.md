@@ -555,8 +555,12 @@ public static function defaultDispatchTypes(): array
 
 public function shouldLog(?string $rawType = null): bool
 {
+    // Use null-coalesce, not config()'s default arg: a config key that is
+    // explicitly set to null (e.g. via config()->set in tests) returns null,
+    // which would TypeError into isAllowedBy(array $allowed). The ??
+    // pattern handles both "key absent" and "key set to null".
     return $this->isAllowedBy(
-        config('wuz.logging.event_types', self::defaultLoggingTypes()),
+        config('wuz.logging.event_types') ?? self::defaultLoggingTypes(),
         $rawType,
     );
 }
@@ -564,7 +568,7 @@ public function shouldLog(?string $rawType = null): bool
 public function shouldDispatch(?string $rawType = null): bool
 {
     return $this->isAllowedBy(
-        config('wuz.webhook_event.event_types', self::defaultDispatchTypes()),
+        config('wuz.webhook_event.event_types') ?? self::defaultDispatchTypes(),
         $rawType,
     );
 }
@@ -852,7 +856,27 @@ it('dispatches MessageReceived with parsed text fields for MESSAGE webhooks', fu
 });
 ```
 
-Also, remove the `use JordanMiguel\Wuz\Models\WuzDeviceMessage;` import at the top of `tests/Feature/WebhookCallbackTest.php` if it becomes unused after this edit.
+**Also update the second `WuzDeviceMessage` assertion in `WebhookCallbackTest.php`** — the test `it('handles extended text messages', ...)` (around line 85). Replace its body's assertion:
+
+```php
+expect(WuzDeviceMessage::first()->message)->toBe('Extended text with link');
+```
+
+With:
+
+```php
+Event::assertDispatched(MessageReceived::class, fn (MessageReceived $e) =>
+    $e->type === 'text' && $e->content === 'Extended text with link'
+);
+```
+
+After both rewrites, remove the `use JordanMiguel\Wuz\Models\WuzDeviceMessage;` import at the top of the file. Verify with:
+
+```bash
+grep -n "WuzDeviceMessage" tests/Feature/WebhookCallbackTest.php
+```
+
+Expected: zero matches.
 
 - [ ] **Step 3: Run new + updated tests; expect failure**
 
@@ -1035,9 +1059,11 @@ use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
-    Event::fake();
     Http::preventStrayRequests();
 });
+
+// Note: Event::fake() is called per-test rather than in beforeEach because the
+// listener-isolation test needs the real dispatcher to actually run the listener.
 
 function fakeWuzPhoneAndSend(): void
 {
@@ -1052,29 +1078,61 @@ function fakeWuzPhoneAndSend(): void
     ]);
 }
 
+// Tests use 12-digit numbers that bypass BrazilianPhoneFallback (which
+// only triggers for 13-digit Brazilian mobile numbers via `.isBrazilian()`).
+// This keeps phone resolution single-step and assertions deterministic.
+
 it('dispatches MessageSent with the API response on a successful text send', function () {
+    Event::fake();
     fakeWuzPhoneAndSend();
     $owner = TestOwner::create(['name' => 'O']);
     $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     $response = app(SendMessageAction::class)->handle(
         $device,
-        new SendMessageData(phone: '5511999999999', message: 'hi'),
+        new SendMessageData(phone: '551199999999', message: 'hi'),
     );
 
     expect($response)->toBeArray()
-        ->and($response['code'] ?? null)->toBe(200);
+        ->and($response['data']['id'] ?? null)->toBe('wamid.123');
 
     Event::assertDispatched(MessageSent::class, function (MessageSent $e) use ($device) {
         return $e->device->id === $device->id
             && $e->type === 'text'
-            && $e->phone === '5511999999999'
-            && $e->content === 'hi'
-            && ($e->apiResponse['code'] ?? null) === 200;
+            && $e->phone === '551199999999'
+            && $e->content === 'hi';
     });
 });
 
+it('dispatches MessageSent for image, video, and document sends', function () {
+    Event::fake();
+    Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => null]], 200),
+        '*/chat/send/image' => Http::response(['data' => ['id' => 'img-1']], 200),
+        '*/chat/send/video' => Http::response(['data' => ['id' => 'vid-1']], 200),
+        '*/chat/send/document' => Http::response(['data' => ['id' => 'doc-1']], 200),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'O']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
+
+    app(SendMessageAction::class)->handle($device, new SendMessageData(
+        phone: '551199999999', type: 'image', message: '', caption: 'photo', media: 'data:image/jpeg;base64,AAA',
+    ));
+    app(SendMessageAction::class)->handle($device, new SendMessageData(
+        phone: '551199999999', type: 'video', message: '', caption: 'clip', media: 'data:video/mp4;base64,AAA',
+    ));
+    app(SendMessageAction::class)->handle($device, new SendMessageData(
+        phone: '551199999999', type: 'document', message: '', media: 'data:application/pdf;base64,AAA',
+    ));
+
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) => $e->type === 'image' && $e->content === 'photo');
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) => $e->type === 'video' && $e->content === 'clip');
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) => $e->type === 'document');
+});
+
 it('does not dispatch MessageSent in debug-skip mode', function () {
+    Event::fake();
     config()->set('wuz.debug.enabled', true);
     config()->set('wuz.debug.to', null);
 
@@ -1083,7 +1141,7 @@ it('does not dispatch MessageSent in debug-skip mode', function () {
 
     $response = app(SendMessageAction::class)->handle(
         $device,
-        new SendMessageData(phone: '5511999999999', message: 'hi'),
+        new SendMessageData(phone: '551199999999', message: 'hi'),
     );
 
     expect($response)->toBeNull();
@@ -1091,28 +1149,28 @@ it('does not dispatch MessageSent in debug-skip mode', function () {
 });
 
 it('dispatches MessageSent with the redirected phone in debug-redirect mode', function () {
+    Event::fake();
     fakeWuzPhoneAndSend();
     config()->set('wuz.debug.enabled', true);
-    config()->set('wuz.debug.to', '5511000000000');
+    config()->set('wuz.debug.to', '552188888888');
 
     $owner = TestOwner::create(['name' => 'O']);
     $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
 
     app(SendMessageAction::class)->handle(
         $device,
-        new SendMessageData(phone: '5511999999999', message: 'hi'),
+        new SendMessageData(phone: '551199999999', message: 'hi'),
     );
 
     Event::assertDispatched(MessageSent::class, fn (MessageSent $e) =>
-        $e->phone === '5511000000000'
+        $e->phone === '552188888888'
     );
 });
 
 it('does not dispatch MessageSent and propagates WuzApiException on API failure', function () {
+    Event::fake();
     Http::fake([
-        '*/user/lid/*' => Http::response([
-            'data' => ['jid' => '5511@s.whatsapp.net', 'lid' => null],
-        ], 200),
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => null]], 200),
         '*/chat/send/text' => Http::response(['error' => 'rate limit'], 429),
     ]);
 
@@ -1121,7 +1179,7 @@ it('does not dispatch MessageSent and propagates WuzApiException on API failure'
 
     expect(fn () => app(SendMessageAction::class)->handle(
         $device,
-        new SendMessageData(phone: '5511999999999', message: 'hi'),
+        new SendMessageData(phone: '551199999999', message: 'hi'),
     ))->toThrow(WuzApiException::class);
 
     Event::assertNotDispatched(MessageSent::class);
@@ -1129,9 +1187,7 @@ it('does not dispatch MessageSent and propagates WuzApiException on API failure'
 
 it('persists the WuzPhoneJid cache row even when the send fails', function () {
     Http::fake([
-        '*/user/lid/*' => Http::response([
-            'data' => ['jid' => '5511@s.whatsapp.net', 'lid' => null],
-        ], 200),
+        '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => null]], 200),
         '*/chat/send/text' => Http::response(['error' => 'rate limit'], 429),
     ]);
 
@@ -1141,13 +1197,37 @@ it('persists the WuzPhoneJid cache row even when the send fails', function () {
     try {
         app(SendMessageAction::class)->handle(
             $device,
-            new SendMessageData(phone: '5511999999999', message: 'hi'),
+            new SendMessageData(phone: '551199999999', message: 'hi'),
         );
     } catch (WuzApiException) {
         // expected
     }
 
-    expect(WuzPhoneJid::where('phone', '5511999999999')->count())->toBe(1);
+    expect(WuzPhoneJid::where('phone', '551199999999')->count())->toBe(1);
+});
+
+it('does not propagate MessageSent listener exceptions', function () {
+    // Note: NO Event::fake() — the real dispatcher must run so the listener
+    // fires and the safely() catch-and-report path is exercised.
+    fakeWuzPhoneAndSend();
+    \Illuminate\Support\Facades\Exceptions::fake();
+
+    \Illuminate\Support\Facades\Event::listen(MessageSent::class, function () {
+        throw new RuntimeException('listener boom');
+    });
+
+    $owner = TestOwner::create(['name' => 'O']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
+
+    $response = app(SendMessageAction::class)->handle(
+        $device,
+        new SendMessageData(phone: '551199999999', message: 'hi'),
+    );
+
+    expect($response)->toBeArray()
+        ->and($response['data']['id'] ?? null)->toBe('wamid.123');
+
+    \Illuminate\Support\Facades\Exceptions::assertReported(RuntimeException::class);
 });
 ```
 
@@ -1395,6 +1475,58 @@ Event::assertDispatched(MessageSent::class);
 ```
 
 (Test 2 — `'normalizes phone and resolves JID'` — and Test 4 — `'throws when phone is not registered'` — do not touch `WuzDeviceMessage`. Leave them alone.)
+
+- [ ] **Step 5b: Update `tests/Feature/WuzChannelTest.php`**
+
+The first test at line 38 (`'sends a message via the WuzChannel'`) asserts on `WuzDeviceMessage`. The channel itself doesn't change, but it now drives the new `MessageSent` event. Update:
+
+Remove the import at line 6:
+
+```php
+use JordanMiguel\Wuz\Models\WuzDeviceMessage;
+```
+
+Add at the top (after the existing `use` lines):
+
+```php
+use Illuminate\Support\Facades\Event;
+use JordanMiguel\Wuz\Events\MessageSent;
+```
+
+Add (or merge into existing) at the top of the file, before `class TestWuzNotification`:
+
+```php
+beforeEach(function () {
+    Event::fake();
+});
+```
+
+In the `'sends a message via the WuzChannel'` test, replace lines 58-61:
+
+```php
+$message = WuzDeviceMessage::where('wuz_device_id', $device->id)->first();
+expect($message)->not->toBeNull()
+    ->and($message->message)->toBe('Hello from notification!')
+    ->and($message->type)->toBe('text');
+```
+
+With:
+
+```php
+Event::assertDispatched(MessageSent::class, fn (MessageSent $e) =>
+    $e->device->id === $device->id
+        && $e->type === 'text'
+        && $e->content === 'Hello from notification!'
+);
+```
+
+Verify with:
+
+```bash
+grep -n "WuzDeviceMessage" tests/Feature/WuzChannelTest.php
+```
+
+Expected: zero matches.
 
 - [ ] **Step 6: Run the targeted tests**
 
@@ -2232,8 +2364,8 @@ Expected: only references inside `UPGRADING.md` (documenting the removal). No ma
 
 - [ ] **Confirm enum is clean**
 
-Run: `grep -E "RECEIPT|STREAM_REPLACED|APP_STATE|PUSH_NAME_SETTING|QR_SCANNED_WITHOUT_MULTIDEVICE|CAT_REFRESH_ERROR|case ALL" src/Enums/WuzEventType.php`
-Expected: no matches (`READ_RECEIPT` is fine — that's a different case, not in the regex).
+Run: `grep -E "case (RECEIPT|STREAM_REPLACED|APP_STATE|APP_STATE_SYNC_COMPLETE|PUSH_NAME_SETTING|QR_SCANNED_WITHOUT_MULTIDEVICE|CAT_REFRESH_ERROR|ALL)\\b" src/Enums/WuzEventType.php`
+Expected: no matches. (Word-boundary anchor `\b` and the `case ` prefix prevent `READ_RECEIPT` from matching the `RECEIPT` alternative.)
 
 - [ ] **Smoke-test the webhook route end-to-end**
 

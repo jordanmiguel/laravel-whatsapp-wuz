@@ -175,7 +175,7 @@ public static function defaultDispatchTypes(): array
 public function shouldLog(?string $rawType = null): bool
 {
     return $this->isAllowedBy(
-        config('wuz.logging.event_types', self::defaultLoggingTypes()),
+        config('wuz.logging.event_types') ?? self::defaultLoggingTypes(),
         $rawType,
     );
 }
@@ -183,7 +183,7 @@ public function shouldLog(?string $rawType = null): bool
 public function shouldDispatch(?string $rawType = null): bool
 {
     return $this->isAllowedBy(
-        config('wuz.webhook_event.event_types', self::defaultDispatchTypes()),
+        config('wuz.webhook_event.event_types') ?? self::defaultDispatchTypes(),
         $rawType,
     );
 }
