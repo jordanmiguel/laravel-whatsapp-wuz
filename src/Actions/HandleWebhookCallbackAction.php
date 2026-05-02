@@ -10,7 +10,6 @@ use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
 use JordanMiguel\Wuz\Models\WuzCallbackLog;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Services\WuzServiceFactory;
 
 class HandleWebhookCallbackAction
@@ -47,47 +46,49 @@ class HandleWebhookCallbackAction
         };
     }
 
-    private function handleMessage(WuzDevice $device, array $data): void
+    private function handleMessage(WuzDevice $device, array $payload): void
     {
-        $info = $data['Info'] ?? [];
-        $message = $data['Message'] ?? [];
+        $info = $payload['Info'] ?? [];
+        $message = $payload['Message'] ?? [];
 
         $chatJid = $info['RemoteJid'] ?? null;
-        $senderJid = $info['Sender']['User'] ?? null;
-        $messageType = 'text';
-        $messageContent = null;
-        $metadata = [];
 
-        if (isset($message['conversation'])) {
-            $messageType = 'text';
-            $messageContent = $message['conversation'];
-        } elseif (isset($message['extendedTextMessage'])) {
-            $messageType = 'text';
-            $messageContent = $message['extendedTextMessage']['text'] ?? null;
-        } elseif (isset($message['imageMessage'])) {
-            $messageType = 'image';
-            $messageContent = $message['imageMessage']['caption'] ?? null;
-            $metadata = $this->downloadMedia($device, $message['imageMessage'], 'image');
-        } elseif (isset($message['videoMessage'])) {
-            $messageType = 'video';
-            $messageContent = $message['videoMessage']['caption'] ?? null;
-            $metadata = $this->downloadMedia($device, $message['videoMessage'], 'video');
-        } elseif (isset($message['documentMessage'])) {
-            $messageType = 'document';
-            $messageContent = $message['documentMessage']['fileName'] ?? $message['documentMessage']['title'] ?? null;
-            $metadata = $this->downloadMedia($device, $message['documentMessage'], 'document');
+        if (! is_string($chatJid) || $chatJid === '') {
+            return;
         }
 
-        $deviceMessage = WuzDeviceMessage::create([
-            'wuz_device_id' => $device->id,
-            'chat_jid' => $chatJid,
-            'sender_jid' => $senderJid,
-            'message' => $messageContent,
-            'metadata' => $metadata,
-            'type' => $messageType,
-        ]);
+        $senderJid = $info['Sender']['User'] ?? null;
+        [$type, $content] = $this->parseMessage($message);
 
-        MessageReceived::dispatch($device, $deviceMessage);
+        MessageReceived::dispatch($device, $type, $chatJid, $senderJid, $content, $payload);
+    }
+
+    private function parseMessage(array $message): array
+    {
+        if (isset($message['conversation'])) {
+            return ['text', $message['conversation']];
+        }
+
+        if (isset($message['extendedTextMessage'])) {
+            return ['text', $message['extendedTextMessage']['text'] ?? null];
+        }
+
+        if (isset($message['imageMessage'])) {
+            return ['image', $message['imageMessage']['caption'] ?? null];
+        }
+
+        if (isset($message['videoMessage'])) {
+            return ['video', $message['videoMessage']['caption'] ?? null];
+        }
+
+        if (isset($message['documentMessage'])) {
+            return [
+                'document',
+                $message['documentMessage']['fileName'] ?? $message['documentMessage']['title'] ?? null,
+            ];
+        }
+
+        return ['text', null];
     }
 
     private function downloadMedia(WuzDevice $device, array $mediaMessage, string $type): array

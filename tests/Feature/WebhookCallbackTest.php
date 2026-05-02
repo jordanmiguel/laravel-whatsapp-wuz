@@ -8,7 +8,6 @@ use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
 use JordanMiguel\Wuz\Models\WuzCallbackLog;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
 beforeEach(function () {
@@ -28,7 +27,7 @@ it('logs callbacks and dispatches WebhookReceived event', function () {
     Event::assertDispatched(WebhookReceived::class);
 });
 
-it('handles MESSAGE events and stores device messages', function () {
+it('dispatches MessageReceived with parsed text fields for MESSAGE webhooks', function () {
     $owner = TestOwner::create(['name' => 'Test']);
     $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'msg-token']);
 
@@ -45,13 +44,13 @@ it('handles MESSAGE events and stores device messages', function () {
 
     app(HandleWebhookCallbackAction::class)->handle('msg-token', $payload);
 
-    expect(WuzDeviceMessage::count())->toBe(1);
-    $msg = WuzDeviceMessage::first();
-    expect($msg->message)->toBe('Hello from WhatsApp!');
-    expect($msg->type)->toBe('text');
-    expect($msg->chat_jid)->toBe('5511@s.whatsapp.net');
-
-    Event::assertDispatched(MessageReceived::class);
+    Event::assertDispatched(MessageReceived::class, function (MessageReceived $event) use ($device) {
+        return $event->device->id === $device->id
+            && $event->type === 'text'
+            && $event->chatJid === '5511@s.whatsapp.net'
+            && $event->senderJid === '5511999999999'
+            && $event->content === 'Hello from WhatsApp!';
+    });
 });
 
 it('handles DISCONNECTED events', function () {
@@ -96,5 +95,7 @@ it('handles extended text messages', function () {
 
     app(HandleWebhookCallbackAction::class)->handle('ext-token', $payload);
 
-    expect(WuzDeviceMessage::first()->message)->toBe('Extended text with link');
+    Event::assertDispatched(MessageReceived::class, fn (MessageReceived $e) =>
+        $e->type === 'text' && $e->content === 'Extended text with link'
+    );
 });
