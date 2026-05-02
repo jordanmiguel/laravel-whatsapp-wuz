@@ -11,6 +11,14 @@ return [
         'middleware' => [],
     ],
 
+    'logging' => [
+        'event_types' => \JordanMiguel\Wuz\Enums\WuzEventType::defaultLoggingTypes(),
+    ],
+
+    'webhook_event' => [
+        'event_types' => \JordanMiguel\Wuz\Enums\WuzEventType::defaultDispatchTypes(),
+    ],
+
     'debug' => [
         'enabled' => env('WUZ_DEBUG', false),
         'to' => env('WUZ_DEBUG_TO'),
