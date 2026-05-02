@@ -41,7 +41,8 @@ class HandleWebhookCallbackAction
             ]));
         }
 
-        // 3. Best-effort generic WebhookReceived dispatch.
+        // 3. Best-effort generic WebhookReceived dispatch. Event constructed first so
+        //    package-side TypeErrors propagate; only listener execution is wrapped.
         if ($eventType->shouldDispatch($rawType)) {
             $event = new WebhookReceived($device, $eventType, $payload);
             $this->safely(fn () => event($event));
