@@ -12,9 +12,11 @@ Today, every webhook callback the package receives produces:
 2. A `WebhookReceived` event dispatch.
 3. Type-specific side effects (`WuzDeviceMessage` row + `MessageReceived` for `MESSAGE`; `device.connected` mutation + `DeviceDisconnected` for `DISCONNECTED`/`LOGGED_OUT`).
 
-There are 47 distinct `WuzEventType` cases. Several are extremely high-volume (`RECEIPT`, `READ_RECEIPT`, `PRESENCE`, `CHAT_PRESENCE`, `HISTORY_SYNC`, `APP_STATE*`, `OFFLINE_SYNC*`, `CALL_RELAY_LATENCY`, `KEEP_ALIVE_*`). In production this generates an unmanageable volume of `wuz_callback_logs` rows and `WebhookReceived` dispatches.
+There are 47 distinct `WuzEventType` cases. Several are extremely high-volume (`READ_RECEIPT`, `PRESENCE`, `CHAT_PRESENCE`, `HISTORY_SYNC`, `OFFLINE_SYNC*`, `CALL_RELAY_LATENCY`, `KEEP_ALIVE_*`). In production this generates an unmanageable volume of `wuz_callback_logs` rows and `WebhookReceived` dispatches.
 
 Package consumers currently have **no knobs** to opt out of any of this.
+
+A separate, related correctness issue surfaced during research (see "Enum alignment" below): the `WuzEventType` enum is out of sync with what WUZ actually emits — 7 cases that never fire and 1 emitted type missing.
 
 ## Goals
 
@@ -23,6 +25,7 @@ Package consumers currently have **no knobs** to opt out of any of this.
 - Give consumers a toggle for **whether incoming messages are persisted** to `wuz_device_messages`.
 - Ship safe, narrow defaults so the volume problem is fixed on upgrade without consumer action.
 - Preserve the package's *behavioural* job (turning webhooks into messages and connection state) as reliable and not toggleable per-type.
+- Align `WuzEventType` with the set of types WUZ actually emits — remove dead cases, add missing ones — so consumers reasoning about the enum get an honest list.
 
 ## Non-goals
 
@@ -44,6 +47,61 @@ Verified against [`asternic/wuzapi`](https://github.com/asternic/wuzapi) `main` 
 **Implication:** the volume problem is squarely on the consumer side. This design fixes it where it lives.
 
 **Known follow-up:** with `media_delivery=base64` (WUZ default), `MESSAGE` event payloads for media include the base64-encoded file inline. When `MESSAGE` is in `logging.event_types` (which it is by default), each media message inflates the `wuz_callback_logs.payload` JSON column to the file size. Mitigations are out of scope for this spec but worth a follow-up: either payload sanitization in the action, or guidance to switch the WUZ-side `media_delivery` to `s3`.
+
+## Enum alignment
+
+Cross-referencing every `postmap["type"] = "..."` site in WUZ's `wmiau.go` against `WuzEventType` revealed drift in both directions.
+
+### Cases to remove (dead — WUZ never emits these)
+
+| Enum case | Reason |
+|---|---|
+| `RECEIPT = 'Receipt'` | WUZ remaps whatsmeow's `*events.Receipt` to **`ReadReceipt`** (`wmiau.go:1058-1059`). `READ_RECEIPT` is the real case. |
+| `STREAM_REPLACED = 'StreamReplaced'` | WUZ logs internally and `return`s — no webhook (`wmiau.go:819-821`). |
+| `APP_STATE = 'AppState'` | Logged internally, no webhook (`wmiau.go:1361`). |
+| `APP_STATE_SYNC_COMPLETE = 'AppStateSyncComplete'` | Handled internally, no webhook (`wmiau.go:685`). |
+| `PUSH_NAME_SETTING = 'PushNameSetting'` | Bundled with `Connected` in WUZ's switch — emitted as `Connected`, never as its own type. |
+| `QR_SCANNED_WITHOUT_MULTIDEVICE = 'QRScannedWithoutMultidevice'` | Not handled by WUZ. |
+| `CAT_REFRESH_ERROR = 'CATRefreshError'` | Not handled by WUZ. |
+
+Removing these means: the corresponding `match` arm in `label()` is also dropped; any consumer code that referenced them produces a fatal error after upgrade. Documented in `UPGRADING.md` (see Migration).
+
+### Case to add
+
+- `QR_TIMEOUT = 'QRTimeout'` — emitted at `wmiau.go:541` when the QR pairing window expires. Belongs in the same family as `PAIR_ERROR` and `CONNECT_FAILURE`. Add it to `defaultLoggingTypes()` so pairing failures leave a forensic trail by default.
+
+### `ALL` — keep but document
+
+`WuzEventType::ALL = 'All'` is **not an emitted event type**. WUZ uses the string `"All"` as a sentinel value in the per-user `events` subscription column to mean "subscribe to everything." It will never appear in an incoming webhook payload, so `detect()` will never return it.
+
+Decision: **keep the case** (consumers may need it when calling subscription APIs like `SyncDeviceWebhooksAction`), but add a docblock comment to the case clarifying it's a subscription-only sentinel. Splitting into a separate `WuzEventSubscription` enum is a larger refactor and not paying for itself today.
+
+`UNKNOWN = 'Unknown'` stays as the internal fallback `detect()` returns for unrecognized payload types.
+
+### Default lists after cleanup
+
+`defaultLoggingTypes()` gains `QR_TIMEOUT`; otherwise unchanged. None of the dead-removed cases were in any default list.
+
+```php
+public static function defaultLoggingTypes(): array
+{
+    return [
+        self::MESSAGE,
+        self::CONNECTED,
+        self::DISCONNECTED,
+        self::LOGGED_OUT,
+        self::PAIR_SUCCESS,
+        self::PAIR_ERROR,
+        self::QR,
+        self::QR_TIMEOUT,
+        self::CONNECT_FAILURE,
+        self::STREAM_ERROR,
+        self::TEMPORARY_BAN,
+        self::CLIENT_OUTDATED,
+        self::UNKNOWN,
+    ];
+}
+```
 
 ## Design
 
@@ -81,6 +139,7 @@ public static function defaultLoggingTypes(): array
         self::PAIR_SUCCESS,
         self::PAIR_ERROR,
         self::QR,
+        self::QR_TIMEOUT,
         self::CONNECT_FAILURE,
         self::STREAM_ERROR,
         self::TEMPORARY_BAN,
@@ -98,7 +157,7 @@ public static function defaultDispatchTypes(): array
 
 **Rationale:**
 
-- Logging defaults include the business-critical event (`MESSAGE`), full lifecycle (`CONNECTED`/`DISCONNECTED`/`LOGGED_OUT`), pairing (`PAIR_SUCCESS`/`PAIR_ERROR`/`QR`), and error states worth a forensic trail (`CONNECT_FAILURE`, `STREAM_ERROR`, `TEMPORARY_BAN`, `CLIENT_OUTDATED`). `UNKNOWN` is included so unrecognized upstream payloads aren't silently dropped.
+- Logging defaults include the business-critical event (`MESSAGE`), full lifecycle (`CONNECTED`/`DISCONNECTED`/`LOGGED_OUT`), pairing (`PAIR_SUCCESS`/`PAIR_ERROR`/`QR`/`QR_TIMEOUT`), and error states worth a forensic trail (`CONNECT_FAILURE`, `STREAM_ERROR`, `TEMPORARY_BAN`, `CLIENT_OUTDATED`). `UNKNOWN` is included so unrecognized upstream payloads aren't silently dropped.
 - Dispatch defaults are the four types that already have typed events in the package (`MessageReceived`, `DeviceConnected`, `DeviceDisconnected`). Anything else — opt in.
 - `messages.store = true` preserves message persistence; the only volume scope is `MESSAGE` events, which is bounded.
 
@@ -190,21 +249,28 @@ These are not gated by any allowlist. (`DeviceConnected` is dispatched from `Get
 
 ## Migration
 
-This is a **breaking change** — current consumers logging everything will start logging only ~12 types after upgrade.
+This is a **breaking change** on two axes:
+
+1. **Defaults narrowed** — current consumers logging everything will start logging only ~13 types after upgrade.
+2. **`WuzEventType` cleanup** — 7 cases removed (see Enum alignment), 1 added. Code that references a removed case fails to compile (e.g. `WuzEventType::RECEIPT` becomes a fatal error).
 
 - Major version bump.
 - New `UPGRADING.md` at repo root documenting:
-  - What changed and why (storage volume).
-  - Restore-previous-behaviour snippet:
+  - What changed and why (storage volume + enum drift).
+  - Restore-previous-behaviour snippet for defaults:
     ```php
     'logging' => ['event_types' => ['*']],
     'events'  => ['event_types' => ['*']],
     ```
   - Pointer to `WuzEventType::cases()` for the full type list and to `WuzEventType::defaultLoggingTypes()` / `defaultDispatchTypes()` for the new defaults.
+  - **Removed enum cases table** — for each removed case, what the consumer should do:
+    - `RECEIPT` → use `READ_RECEIPT` (WUZ remaps internally; the right name is `READ_RECEIPT`).
+    - `STREAM_REPLACED`, `APP_STATE`, `APP_STATE_SYNC_COMPLETE`, `PUSH_NAME_SETTING`, `QR_SCANNED_WITHOUT_MULTIDEVICE`, `CAT_REFRESH_ERROR` → no action; these never fired in practice and any subscription/match referencing them was dead.
+  - Mention of new case `QR_TIMEOUT` and that it's included in default logging.
   - Reminder that `download_media` already defaults to `false` and remains so in this release — consumers must opt in via `WUZ_DOWNLOAD_MEDIA=true`. Files written when enabled accumulate in `storage/app/public/wuz-media/{device_id}/` with no cleanup; a retention strategy is a follow-up.
   - Note about WUZ-side `media_delivery=base64` inflating logged `MESSAGE` payloads (see Upstream context section) and the recommendation to set `media_delivery=s3` upstream if media volume is a concern.
 - `README.md` gains a "Configuration — selective logging and events" subsection.
-- No data migration. Existing `wuz_callback_logs` rows are untouched; new rows simply stop being written for excluded types from upgrade-time onward.
+- No data migration. Existing `wuz_callback_logs` rows are untouched. Rows whose `event_type` column equals a removed string (e.g. `'Receipt'`) remain readable — `WuzEventType::tryFrom('Receipt')` simply returns `null` going forward, and the model's `event_type` column is a `string`, not a cast enum, so no read errors.
 
 ## Testing
 
@@ -215,6 +281,8 @@ This is a **breaking change** — current consumers logging everything will star
 - `shouldLog()` returns true/false correctly across config shapes (enum cases, strings, `'*'`, empty, missing key).
 - `shouldDispatch()` symmetric.
 - `defaultLoggingTypes()` and `defaultDispatchTypes()` return the documented sets — regression-guards against accidental edits.
+- `defaultLoggingTypes()` includes `QR_TIMEOUT` (the newly added case).
+- `tryFrom('Receipt')` returns `null` (regression guard for the dead-case removal).
 
 **`tests/Feature/CallbackLogGatingTest.php`** — storage allowlist:
 
@@ -243,15 +311,22 @@ This is a **breaking change** — current consumers logging everything will star
 
 **`tests/Feature/WebhookCallbackTest.php`:**
 
-- The `Receipt`-payload test at line 19 fails under new defaults. Switch it to a default-allowed type (`Connected` or `Message`) so it continues to assert the happy-path log + dispatch behaviour. The wildcard / opt-in case is covered explicitly in `CallbackLogGatingTest`.
+- The `Receipt`-payload test at line 19 is doubly wrong: `Receipt` is not in default allowlists *and* WUZ never emits it. Switch the payload to `Connected` (a default-allowed type that WUZ actually sends) so the test continues to assert happy-path log + dispatch behaviour against a real event type. The wildcard / opt-in case is covered explicitly in `CallbackLogGatingTest`.
 - Other tests already use `Message`, `Disconnected`, `LoggedOut` — all in default allowlists; unaffected.
+
+**`tests/Unit/WuzEventTypeTest.php`:**
+
+- Drop the `['Receipt', WuzEventType::RECEIPT]` data row at line 13 (case removed).
+- Keep the `['All', WuzEventType::ALL]` row at line 14 (`ALL` retained as subscription sentinel).
+- Add a new row covering `QR_TIMEOUT`: `['QRTimeout', WuzEventType::QR_TIMEOUT]`.
 
 ## Files Touched
 
 - `config/wuz.php` — three new keys (`logging`, `events`, `messages`).
-- `src/Enums/WuzEventType.php` — `shouldLog()`, `shouldDispatch()`, `isAllowedBy()`, `defaultLoggingTypes()`, `defaultDispatchTypes()`.
+- `src/Enums/WuzEventType.php` — remove 7 dead cases (`RECEIPT`, `STREAM_REPLACED`, `APP_STATE`, `APP_STATE_SYNC_COMPLETE`, `PUSH_NAME_SETTING`, `QR_SCANNED_WITHOUT_MULTIDEVICE`, `CAT_REFRESH_ERROR`) and their entries in the `label()` match; add `QR_TIMEOUT = 'QRTimeout'` with its label; add docblock comment on `ALL` clarifying it's a subscription sentinel; add `shouldLog()`, `shouldDispatch()`, `isAllowedBy()`, `defaultLoggingTypes()`, `defaultDispatchTypes()`.
 - `src/Actions/HandleWebhookCallbackAction.php` — gating in `handle()` and early-return in `handleMessage()`.
-- `tests/Feature/WebhookCallbackTest.php` — update one test (Receipt → default-allowed type).
+- `tests/Feature/WebhookCallbackTest.php` — switch line 19 payload from `Receipt` to `Connected`.
+- `tests/Unit/WuzEventTypeTest.php` — drop the `Receipt`/`RECEIPT` data row; add a `QRTimeout`/`QR_TIMEOUT` row.
 - `tests/Unit/WuzEventTypeGatingTest.php` — new.
 - `tests/Feature/CallbackLogGatingTest.php` — new.
 - `tests/Feature/WebhookEventGatingTest.php` — new.
