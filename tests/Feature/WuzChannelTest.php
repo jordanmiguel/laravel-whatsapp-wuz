@@ -1,12 +1,17 @@
 <?php
 
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use JordanMiguel\Wuz\Events\MessageSent;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Notifications\WuzChannel;
 use JordanMiguel\Wuz\Notifications\WuzMessage;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
+
+beforeEach(function () {
+    Event::fake();
+});
 
 class TestWuzNotification extends Notification
 {
@@ -55,10 +60,11 @@ it('sends a message via the WuzChannel', function () {
         && $request['Body'] === 'Hello from notification!'
     );
 
-    $message = WuzDeviceMessage::where('wuz_device_id', $device->id)->first();
-    expect($message)->not->toBeNull()
-        ->and($message->message)->toBe('Hello from notification!')
-        ->and($message->type)->toBe('text');
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) =>
+        $e->device->id === $device->id
+            && $e->type === 'text'
+            && $e->content === 'Hello from notification!'
+    );
 });
 
 it('throws when phone validation fails so NotificationFailed fires', function () {

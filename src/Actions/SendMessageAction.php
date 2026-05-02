@@ -2,11 +2,11 @@
 
 namespace JordanMiguel\Wuz\Actions;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use JordanMiguel\Wuz\Data\SendMessageData;
+use JordanMiguel\Wuz\Events\MessageSent;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Models\WuzDeviceMessage;
+use JordanMiguel\Wuz\Services\WuzService;
 use JordanMiguel\Wuz\Services\WuzServiceFactory;
 
 class SendMessageAction
@@ -16,7 +16,10 @@ class SendMessageAction
         private readonly ValidatePhoneAction $validatePhone,
     ) {}
 
-    public function handle(WuzDevice $device, SendMessageData $data): ?WuzDeviceMessage
+    /**
+     * @return array<string, mixed>|null  WUZ API response body, or null when debug-skipped.
+     */
+    public function handle(WuzDevice $device, SendMessageData $data): ?array
     {
         if (config('wuz.debug.enabled')) {
             $debugTo = config('wuz.debug.to');
@@ -42,56 +45,53 @@ class SendMessageAction
             );
         }
 
-        return DB::transaction(function () use ($device, $data) {
-            $wuz = $this->factory->make($device);
-            $validated = $this->validatePhone->handle($wuz, $data->phone);
-            $phone = $validated->phone;
+        $wuz = $this->factory->make($device);
+        $validated = $this->validatePhone->handle($wuz, $data->phone);
+        $phone = $validated->phone;
 
-            $response = null;
-            $messageContent = '';
+        [$response, $messageContent] = $this->dispatchToWuz($wuz, $phone, $data);
 
-            switch ($data->type) {
-                case 'text':
-                    $response = $wuz->sendMessageText($phone, $data->message, $data->link_preview);
-                    $messageContent = $data->message;
-                    break;
+        $event = new MessageSent($device, $data->type, $phone, $messageContent, $response);
+        $this->safely(fn () => event($event));
 
-                case 'image':
-                    $base64Image = $this->encodeMedia($data->media);
-                    $response = $wuz->sendMessageImage($phone, $base64Image, $data->caption ?? '');
-                    $messageContent = $data->caption ?? 'Image';
-                    break;
+        return $response;
+    }
 
-                case 'video':
-                    $base64Video = $this->encodeMedia($data->media);
-                    $response = $wuz->sendMessageVideo($phone, $base64Video, $data->caption ?? '');
-                    $messageContent = $data->caption ?? 'Video';
-                    break;
-
-                case 'document':
-                    $base64Doc = $this->encodeMedia($data->media);
-                    $filename = is_object($data->media) && method_exists($data->media, 'getClientOriginalName')
+    /**
+     * @return array{0: array<string, mixed>, 1: string}
+     */
+    private function dispatchToWuz(WuzService $wuz, string $phone, SendMessageData $data): array
+    {
+        return match ($data->type) {
+            'text' => [
+                $wuz->sendMessageText($phone, $data->message, $data->link_preview),
+                $data->message,
+            ],
+            'image' => [
+                $wuz->sendMessageImage($phone, $this->encodeMedia($data->media), $data->caption ?? ''),
+                $data->caption ?? 'Image',
+            ],
+            'video' => [
+                $wuz->sendMessageVideo($phone, $this->encodeMedia($data->media), $data->caption ?? ''),
+                $data->caption ?? 'Video',
+            ],
+            'document' => [
+                $wuz->sendMessageDocument(
+                    $phone,
+                    $this->encodeMedia($data->media),
+                    is_object($data->media) && method_exists($data->media, 'getClientOriginalName')
                         ? $data->media->getClientOriginalName()
-                        : 'document';
-                    $response = $wuz->sendMessageDocument($phone, $base64Doc, $filename);
-                    $messageContent = $filename;
-                    break;
-
-                case 'button':
-                    $response = $wuz->sendMessageButton($phone, $data->message, $data->buttons ?? []);
-                    $messageContent = $data->message;
-                    break;
-            }
-
-            return WuzDeviceMessage::create([
-                'wuz_device_id' => $device->id,
-                'chat_jid' => $validated->jid,
-                'sender_jid' => $device->jid,
-                'message' => $messageContent,
-                'metadata' => $response,
-                'type' => $data->type,
-            ]);
-        });
+                        : 'document',
+                ),
+                is_object($data->media) && method_exists($data->media, 'getClientOriginalName')
+                    ? $data->media->getClientOriginalName()
+                    : 'document',
+            ],
+            'button' => [
+                $wuz->sendMessageButton($phone, $data->message, $data->buttons ?? []),
+                $data->message,
+            ],
+        };
     }
 
     private function encodeMedia(mixed $media): string
@@ -108,5 +108,14 @@ class SendMessageAction
         }
 
         return '';
+    }
+
+    private function safely(\Closure $action): void
+    {
+        try {
+            $action();
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }
