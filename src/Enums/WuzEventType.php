@@ -103,4 +103,82 @@ enum WuzEventType: string
 
         return self::tryFrom($type) ?? self::UNKNOWN;
     }
+
+    /** @return array<int, self> */
+    public static function defaultLoggingTypes(): array
+    {
+        return [
+            self::CONNECTED,
+            self::DISCONNECTED,
+            self::LOGGED_OUT,
+            self::PAIR_SUCCESS,
+            self::PAIR_ERROR,
+            self::QR,
+            self::QR_TIMEOUT,
+            self::CONNECT_FAILURE,
+            self::STREAM_ERROR,
+            self::TEMPORARY_BAN,
+            self::CLIENT_OUTDATED,
+            self::UNKNOWN,
+        ];
+    }
+
+    /** @return array<int, self> */
+    public static function defaultDispatchTypes(): array
+    {
+        return [
+            self::MESSAGE,
+            self::CONNECTED,
+            self::DISCONNECTED,
+            self::LOGGED_OUT,
+        ];
+    }
+
+    public function shouldLog(?string $rawType = null): bool
+    {
+        // Use null-coalesce, not config()'s default arg: a config key that is
+        // explicitly set to null (e.g. via config()->set in tests) returns null,
+        // which would TypeError into isAllowedBy(array $allowed). The ??
+        // pattern handles both "key absent" and "key set to null".
+        return $this->isAllowedBy(
+            config('wuz.logging.event_types') ?? self::defaultLoggingTypes(),
+            $rawType,
+        );
+    }
+
+    public function shouldDispatch(?string $rawType = null): bool
+    {
+        return $this->isAllowedBy(
+            config('wuz.webhook_event.event_types') ?? self::defaultDispatchTypes(),
+            $rawType,
+        );
+    }
+
+    /**
+     * @param  array<int, self|string>  $allowed
+     */
+    private function isAllowedBy(array $allowed, ?string $rawType): bool
+    {
+        if (in_array('*', $allowed, true)) {
+            return true;
+        }
+
+        foreach ($allowed as $entry) {
+            if ($entry instanceof self && $entry === $this) {
+                return true;
+            }
+
+            if (is_string($entry)) {
+                if ($entry === $this->value) {
+                    return true;
+                }
+
+                if ($rawType !== null && $entry === $rawType) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }
