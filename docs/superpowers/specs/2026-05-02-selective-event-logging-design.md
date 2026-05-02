@@ -456,7 +456,7 @@ class MessageSent
 ### What stays always-on
 
 - `match` arm side effects in the action: state mutations on `device` for `DISCONNECTED`/`LOGGED_OUT`, message parsing for `MESSAGE`.
-- Typed events: `MessageReceived` for every `MESSAGE`, `DeviceDisconnected` for every `DISCONNECTED`/`LOGGED_OUT`, `MessageSent` after every successful send.
+- Typed events: `MessageReceived` for every valid `MESSAGE` payload with a `RemoteJid` (payloads missing it are a noop, see `handleMessage`); `DeviceDisconnected` for every `DISCONNECTED`/`LOGGED_OUT`; `MessageSent` after every successful (HTTP 2xx) send.
 
 These are not gated by any allowlist. (`DeviceConnected` is dispatched from `GetDeviceStatusAction`, not from the webhook flow.)
 
