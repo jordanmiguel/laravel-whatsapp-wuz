@@ -10,8 +10,8 @@ it('detects known event types from payload', function (string $type, WuzEventTyp
     ['LoggedOut', WuzEventType::LOGGED_OUT],
     ['Connected', WuzEventType::CONNECTED],
     ['QR', WuzEventType::QR],
-    ['Receipt', WuzEventType::RECEIPT],
-    ['All', WuzEventType::ALL],
+    ['QRTimeout', WuzEventType::QR_TIMEOUT],
+    ['ReadReceipt', WuzEventType::READ_RECEIPT],
 ]);
 
 it('falls back to UNKNOWN for unrecognized types', function () {
@@ -51,3 +51,16 @@ it('falls back to UNKNOWN when type is an object', function () {
 it('falls back to UNKNOWN when type is explicitly null', function () {
     expect(WuzEventType::detect(['type' => null]))->toBe(WuzEventType::UNKNOWN);
 });
+
+it('returns null for tryFrom of removed dead cases', function (string $value) {
+    expect(WuzEventType::tryFrom($value))->toBeNull();
+})->with([
+    ['Receipt'],
+    ['StreamReplaced'],
+    ['AppState'],
+    ['AppStateSyncComplete'],
+    ['PushNameSetting'],
+    ['QRScannedWithoutMultidevice'],
+    ['CATRefreshError'],
+    ['All'],
+]);

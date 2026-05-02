@@ -21,10 +21,10 @@ it('logs callbacks and dispatches WebhookReceived event', function () {
     $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'callback-token-123']);
 
     $action = app(HandleWebhookCallbackAction::class);
-    $action->handle('callback-token-123', ['type' => 'Receipt'], '127.0.0.1', 'TestAgent');
+    $action->handle('callback-token-123', ['type' => 'Connected'], '127.0.0.1', 'TestAgent');
 
     expect(WuzCallbackLog::count())->toBe(1);
-    expect(WuzCallbackLog::first()->event_type)->toBe('Receipt');
+    expect(WuzCallbackLog::first()->event_type)->toBe('Connected');
     Event::assertDispatched(WebhookReceived::class);
 });
 
