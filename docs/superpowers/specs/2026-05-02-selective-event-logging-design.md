@@ -216,12 +216,15 @@ private function isAllowedBy(array $allowed, ?string $rawType): bool
 
 The `$rawType` parameter is the original payload's `type` string — so a consumer can allowlist a string like `'FooEvent'` for a future WUZ event type that doesn't yet have an enum case. The resolved enum value would be `UNKNOWN`, but the raw string still matches.
 
-### Gating + dispatch order + listener isolation in `HandleWebhookCallbackAction::handle()`
+### Gating + dispatch order + best-effort observability in `HandleWebhookCallbackAction::handle()`
 
-Two concerns to address together:
+Three concerns to address together:
 
 1. **Order:** state mutations must run before any event dispatch so a synchronous listener exception cannot block them.
-2. **Isolation:** Laravel's synchronous event dispatcher propagates listener exceptions to the caller. The webhook route is the caller — if it fails, WUZ retries the webhook (`asternic/wuzapi/helpers.go`), causing duplicate processing of an event whose state mutations have already committed. Every dispatch site after an irreversible side effect must therefore catch and `report()` listener throwables, not propagate them.
+2. **Isolation of listener exceptions:** Laravel's synchronous event dispatcher propagates listener exceptions to the caller. The webhook route is the caller — if it fails, WUZ retries the webhook (`asternic/wuzapi/helpers.go`), causing duplicate processing of an event whose state mutations have already committed.
+3. **Isolation of log-insert exceptions:** `WuzCallbackLog::create()` after side effects has the same retry/duplication risk if the DB throws (connection drop, constraint violation, etc.). Logging must be best-effort.
+
+A single helper covers both observational concerns. Event objects are **constructed eagerly** before the safe boundary so that constructor `TypeError`s (package bugs) propagate normally and surface in tests; only the act of *running* the dispatch (and listeners) is wrapped:
 
 ```php
 public function handle(string $token, array $payload, ?string $ipAddress = null, ?string $userAgent = null): void
@@ -243,50 +246,55 @@ public function handle(string $token, array $payload, ?string $ipAddress = null,
         default => null,
     };
 
-    // 2. Insert log row if the type is in the logging allowlist.
+    // 2. Best-effort log insert. DB failure is reported but does not fail the
+    //    webhook route (which would cause WUZ to retry and duplicate side effects).
     if ($eventType->shouldLog($rawType)) {
-        WuzCallbackLog::create([
+        $this->safely(fn () => WuzCallbackLog::create([
             'wuz_device_id' => $device->id,
             'event_type' => $rawType ?? $eventType->value,
             'payload' => $payload,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
-        ]);
+        ]));
     }
 
-    // 3. Dispatch generic WebhookReceived LAST. Isolated: listener exceptions are
-    //    reported but not propagated, so the webhook route returns 2xx and WUZ
-    //    does not retry (which would duplicate the side effects above).
+    // 3. Best-effort generic WebhookReceived dispatch. Event constructed first so
+    //    package-side TypeErrors propagate; only listener execution is wrapped.
     if ($eventType->shouldDispatch($rawType)) {
-        $this->dispatchSafely(fn () => WebhookReceived::dispatch($device, $eventType, $payload));
+        $event = new WebhookReceived($device, $eventType, $payload);
+        $this->safely(fn () => event($event));
     }
 }
 
-private function dispatchSafely(\Closure $dispatcher): void
+private function safely(\Closure $action): void
 {
     try {
-        $dispatcher();
+        $action();
     } catch (\Throwable $e) {
         report($e);
     }
 }
 ```
 
-The same `dispatchSafely()` wraps `MessageReceived` (in `handleMessage`) and `DeviceDisconnected` (in `handleDisconnected`/`handleLoggedOut`) — every typed event the action dispatches happens *after* an irreversible side effect (parsed message data already exists; `device.connected` already flipped), so listener failures must not propagate. Updated `handleDisconnected`/`handleLoggedOut`:
+The same eager-construct + `safely()`-dispatch pattern wraps `MessageReceived` (in `handleMessage`) and `DeviceDisconnected` (in `handleDisconnected`/`handleLoggedOut`):
 
 ```php
 private function handleDisconnected(WuzDevice $device): void
 {
     $device->update(['connected' => false]);
-    $this->dispatchSafely(fn () => DeviceDisconnected::dispatch($device));
+    $event = new DeviceDisconnected($device);
+    $this->safely(fn () => event($event));
 }
 
 private function handleLoggedOut(WuzDevice $device): void
 {
     $device->update(['connected' => false, 'jid' => null]);
-    $this->dispatchSafely(fn () => DeviceDisconnected::dispatch($device));
+    $event = new DeviceDisconnected($device);
+    $this->safely(fn () => event($event));
 }
 ```
+
+**Trade-off note:** the failure mode for an event-constructor bug (a package-side regression) is now: constructor throws → action throws → webhook route 5xx → WUZ retries → state mutation re-runs. This is intentional — package-side type errors are loud bugs that should be caught in CI before reaching production, not silently reported. Listener exceptions in consumer code are the common case and are correctly isolated.
 
 `event_type` on the log row stores the raw payload type when present, so unknown-type rows carry the original string for forensics rather than collapsing to `'Unknown'`.
 
@@ -326,9 +334,8 @@ private function handleMessage(WuzDevice $device, array $payload): void
         return;
     }
 
-    $this->dispatchSafely(
-        fn () => MessageReceived::dispatch($device, $type, $chatJid, $senderJid, $content, $payload),
-    );
+    $event = new MessageReceived($device, $type, $chatJid, $senderJid, $content, $payload);
+    $this->safely(fn () => event($event));
 }
 
 private function parseMessage(array $message): array
@@ -400,20 +407,20 @@ public function handle(WuzDevice $device, SendMessageData $data): ?array
     // can react to send failures. No MessageSent dispatch in that path.
     [$response, $messageContent] = $this->dispatchToWuz($wuz, $validated->phone, $data);
 
-    // Send succeeded (HTTP 2xx). Dispatch is isolated: listener exceptions are
-    // reported but not propagated, so a failing listener does not cause the
+    // Send succeeded (HTTP 2xx). Event is constructed eagerly so a constructor
+    // TypeError (package bug) propagates and surfaces in tests; only listener
+    // execution is wrapped so a failing consumer listener cannot cause the
     // caller's job to retry and re-send the WhatsApp message.
-    $this->dispatchSafely(
-        fn () => MessageSent::dispatch($device, $data->type, $validated->phone, $messageContent, $response),
-    );
+    $event = new MessageSent($device, $data->type, $validated->phone, $messageContent, $response);
+    $this->safely(fn () => event($event));
 
     return $response;
 }
 
-private function dispatchSafely(\Closure $dispatcher): void
+private function safely(\Closure $action): void
 {
     try {
-        $dispatcher();
+        $action();
     } catch (\Throwable $e) {
         report($e);
     }
@@ -585,12 +592,14 @@ This is a **breaking change** on multiple axes:
 - **Phone JID cache persists when send fails:** mock phone resolution success + send failure; assert `WuzPhoneJid` row exists for the phone after the exception (regression guard for the partial-commit decision).
 - **Listener exception does not propagate:** install a listener for `MessageSent` that throws; the action still returns the API response normally; the throwable is reported (assert via `Log::shouldReceive('error')` or by spying on `report()` if the test harness allows).
 
-**`tests/Feature/DispatchOrderTest.php`** — the HIGH-1 fix and listener isolation:
+**`tests/Feature/DispatchOrderTest.php`** — order, listener isolation, and best-effort logging:
 
 - A `WebhookReceived` listener that throws: the webhook action returns normally (does not propagate); `device.connected` is still flipped on `Disconnected`; `DeviceDisconnected` typed event still fired.
 - A `MessageReceived` listener that throws: the webhook action returns normally; the `WuzCallbackLog` row was inserted (if applicable to the type).
 - A `DeviceDisconnected` listener that throws: the action returns normally; `device.connected` already flipped.
-- The reported throwable is observable (e.g. by faking the exception handler with `Exceptions::fake()` in Laravel 11+ or substituting the `ExceptionHandler` binding).
+- **Log insert failure does not block side effects:** simulate a DB failure on `WuzCallbackLog::create()` (e.g. drop the table mid-test or bind a model that throws). The action returns normally, state mutations have committed, typed events fired, generic `WebhookReceived` dispatched. The throwable is reported.
+- **Event-constructor errors DO propagate (regression guard for the trade-off note):** if a hypothetical refactor breaks `MessageReceived`'s constructor signature, the action throws — confirming package-side type errors are not silently swallowed. Skip if too brittle to express.
+- The reported throwables are observable via `Exceptions::fake()` (Laravel 11+) or by substituting the `ExceptionHandler` binding.
 
 ### Existing test changes
 
@@ -620,8 +629,8 @@ This is a **breaking change** on multiple axes:
 - `config/wuz.php` — add `logging` and `webhook_event` keys; remove `download_media`; remove `table_names.device_messages` entry.
 - `src/Enums/WuzEventType.php` — remove 7 dead cases + their `label()` arms; add `QR_TIMEOUT` + label; remove `ALL`; add `shouldLog()`, `shouldDispatch()`, `isAllowedBy()`, `defaultLoggingTypes()`, `defaultDispatchTypes()`; harden `detect()` to handle non-string `type` without `TypeError`.
 - `src/Enums/WuzEventSubscription.php` — **new**.
-- `src/Actions/HandleWebhookCallbackAction.php` — reorder dispatch (state → log → event); add private `dispatchSafely()` helper wrapping every event dispatch in try/catch + `report()`; wrap `WebhookReceived`, `MessageReceived`, and `DeviceDisconnected` dispatches; remove `downloadMedia()` private method; remove media download imports/calls; rewrite `handleMessage()` to parse payload and dispatch `MessageReceived` without persisting; remove `WuzDeviceMessage` import.
-- `src/Actions/SendMessageAction.php` — change return type to `?array`; remove `DB::transaction` wrapper (rationale: `WuzPhoneJid` cache write is intentionally independent of send outcome); remove `WuzDeviceMessage::create` write; add private `dispatchSafely()` helper; dispatch `MessageSent` after successful API call (HTTP 2xx); keep debug-skip behaviour.
+- `src/Actions/HandleWebhookCallbackAction.php` — reorder (state → log → event); add private `safely(\Closure)` helper wrapping log insert and every event dispatch in try/catch + `report()`; events are constructed eagerly before the safe boundary so package-side constructor errors propagate; remove `downloadMedia()` private method; remove media download imports/calls; rewrite `handleMessage()` to parse payload and dispatch `MessageReceived` without persisting; remove `WuzDeviceMessage` import.
+- `src/Actions/SendMessageAction.php` — change return type to `?array`; remove `DB::transaction` wrapper (rationale: `WuzPhoneJid` cache write is intentionally independent of send outcome); remove `WuzDeviceMessage::create` write; add private `safely(\Closure)` helper; eagerly construct `MessageSent` then safely dispatch after successful API call (HTTP 2xx); keep debug-skip behaviour.
 - `src/Events/MessageReceived.php` — change constructor signature to flat parsed fields + raw payload; drop `WuzDeviceMessage` import.
 - `src/Events/MessageSent.php` — **new**.
 - `src/Models/WuzDeviceMessage.php` — **delete**.
@@ -629,6 +638,7 @@ This is a **breaking change** on multiple axes:
 - `src/Services/WuzService.php` — replace hardcoded `'All'` at line 41 (`addUser`) and line 184 (`setWebhookEvents`) with `WuzEventSubscription::ALL->value`.
 - `database/migrations/create_wuz_device_messages_table.php.stub` — **delete**.
 - `src/WuzServiceProvider.php` — remove the `device_messages` migration registration (currently lines around the loadMigrationsFrom block).
+- `tests/TestCase.php` — remove the `create_wuz_device_messages_table.php.stub` include at lines 45-46 (stub is deleted).
 - `tests/Feature/WebhookCallbackTest.php` — update Receipt → Connected; rewrite message-related assertions.
 - `tests/Unit/WuzEventTypeTest.php` — drop Receipt + All rows; add QRTimeout.
 - `tests/Feature/SendMessageActionTest.php` — update return-type and event assertions.
