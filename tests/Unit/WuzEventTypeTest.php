@@ -35,3 +35,19 @@ it('has correct string values for all cases', function () {
     expect(WuzEventType::UNDECRYPTABLE_MESSAGE->value)->toBe('UndecryptableMessage');
     expect(WuzEventType::FB_MESSAGE->value)->toBe('FBMessage');
 });
+
+it('falls back to UNKNOWN when type is an array', function () {
+    expect(WuzEventType::detect(['type' => ['nested']]))->toBe(WuzEventType::UNKNOWN);
+});
+
+it('falls back to UNKNOWN when type is an integer', function () {
+    expect(WuzEventType::detect(['type' => 42]))->toBe(WuzEventType::UNKNOWN);
+});
+
+it('falls back to UNKNOWN when type is an object', function () {
+    expect(WuzEventType::detect(['type' => new \stdClass()]))->toBe(WuzEventType::UNKNOWN);
+});
+
+it('falls back to UNKNOWN when type is explicitly null', function () {
+    expect(WuzEventType::detect(['type' => null]))->toBe(WuzEventType::UNKNOWN);
+});

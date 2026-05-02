@@ -111,6 +111,10 @@ enum WuzEventType: string
     {
         $type = $data['type'] ?? null;
 
+        if (! is_string($type)) {
+            return self::UNKNOWN;
+        }
+
         return self::tryFrom($type) ?? self::UNKNOWN;
     }
 }
