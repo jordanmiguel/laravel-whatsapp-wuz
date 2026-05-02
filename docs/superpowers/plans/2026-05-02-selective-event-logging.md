@@ -1000,6 +1000,7 @@ or download media via listeners."
 - Create: `src/Events/MessageSent.php`
 - Modify: `src/Actions/SendMessageAction.php`
 - Modify: `tests/Feature/SendMessageActionTest.php`
+- Modify: `tests/Feature/WuzChannelTest.php`
 - Create: `tests/Feature/MessageSentEventTest.php`
 
 **Why:** Outbound symmetric to inbound — drop the `WuzDeviceMessage::create` write, return the API response, dispatch `MessageSent` for observability. Removes the `DB::transaction` wrapper because the only remaining DB write (`WuzPhoneJid` cache) is intentionally independent of send outcome (per spec rationale).
@@ -1530,7 +1531,7 @@ Expected: zero matches.
 
 - [ ] **Step 6: Run the targeted tests**
 
-Run: `vendor/bin/pest tests/Feature/MessageSentEventTest.php tests/Feature/SendMessageActionTest.php -v`
+Run: `vendor/bin/pest tests/Feature/MessageSentEventTest.php tests/Feature/SendMessageActionTest.php tests/Feature/WuzChannelTest.php -v`
 Expected: all tests PASS.
 
 - [ ] **Step 7: Run the full suite**
@@ -1542,7 +1543,8 @@ Expected: all tests PASS.
 
 ```bash
 git add src/Events/MessageSent.php src/Actions/SendMessageAction.php \
-  tests/Feature/SendMessageActionTest.php tests/Feature/MessageSentEventTest.php
+  tests/Feature/SendMessageActionTest.php tests/Feature/MessageSentEventTest.php \
+  tests/Feature/WuzChannelTest.php
 git commit -m "refactor: outbound sends dispatch MessageSent and return ?array
 
 Drop WuzDeviceMessage::create from SendMessageAction; remove DB
