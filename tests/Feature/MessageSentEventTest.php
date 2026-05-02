@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\SendMessageAction;
 use JordanMiguel\Wuz\Data\SendMessageData;
@@ -162,9 +163,9 @@ it('does not propagate MessageSent listener exceptions', function () {
     // Note: NO Event::fake() — the real dispatcher must run so the listener
     // fires and the safely() catch-and-report path is exercised.
     fakeWuzPhoneAndSend();
-    \Illuminate\Support\Facades\Exceptions::fake();
+    Exceptions::fake();
 
-    \Illuminate\Support\Facades\Event::listen(MessageSent::class, function () {
+    Event::listen(MessageSent::class, function () {
         throw new RuntimeException('listener boom');
     });
 
@@ -179,5 +180,5 @@ it('does not propagate MessageSent listener exceptions', function () {
     expect($response)->toBeArray()
         ->and($response['data']['id'] ?? null)->toBe('wamid.123');
 
-    \Illuminate\Support\Facades\Exceptions::assertReported(RuntimeException::class);
+    Exceptions::assertReported(RuntimeException::class);
 });

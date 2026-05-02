@@ -51,6 +51,9 @@ class SendMessageAction
 
         [$response, $messageContent] = $this->dispatchToWuz($wuz, $phone, $data);
 
+        // Event constructed eagerly: a constructor TypeError is a package bug and
+        // must surface. Only listener execution is wrapped — a failing listener
+        // must not fail the calling job (queue retry => duplicate WhatsApp send).
         $event = new MessageSent($device, $data->type, $phone, $messageContent, $response);
         $this->safely(fn () => event($event));
 
@@ -79,19 +82,22 @@ class SendMessageAction
                 $wuz->sendMessageDocument(
                     $phone,
                     $this->encodeMedia($data->media),
-                    is_object($data->media) && method_exists($data->media, 'getClientOriginalName')
-                        ? $data->media->getClientOriginalName()
-                        : 'document',
+                    $this->documentName($data->media),
                 ),
-                is_object($data->media) && method_exists($data->media, 'getClientOriginalName')
-                    ? $data->media->getClientOriginalName()
-                    : 'document',
+                $this->documentName($data->media),
             ],
             'button' => [
                 $wuz->sendMessageButton($phone, $data->message, $data->buttons ?? []),
                 $data->message,
             ],
         };
+    }
+
+    private function documentName(mixed $media): string
+    {
+        return is_object($media) && method_exists($media, 'getClientOriginalName')
+            ? $media->getClientOriginalName()
+            : 'document';
     }
 
     private function encodeMedia(mixed $media): string
