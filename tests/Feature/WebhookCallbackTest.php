@@ -99,3 +99,82 @@ it('handles extended text messages', function () {
         $e->type === 'text' && $e->content === 'Extended text with link'
     );
 });
+
+it('unwraps the WUZ webhook envelope to detect event type', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'env-token']);
+
+    $envelope = [
+        'instanceName' => 'instance-name',
+        'jsonData' => json_encode(['event' => new \stdClass(), 'type' => 'Connected']),
+        'userID' => 'user-id',
+    ];
+
+    app(HandleWebhookCallbackAction::class)->handle('env-token', $envelope);
+
+    expect(WuzCallbackLog::count())->toBe(1);
+    expect(WuzCallbackLog::first()->event_type)->toBe('Connected');
+    Event::assertDispatched(WebhookReceived::class, fn (WebhookReceived $e) =>
+        $e->eventType === \JordanMiguel\Wuz\Enums\WuzEventType::CONNECTED
+    );
+});
+
+it('unwraps the envelope and runs Disconnected side effects', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create(['token' => 'env-disc']);
+
+    $envelope = [
+        'instanceName' => 'instance-name',
+        'jsonData' => json_encode(['event' => new \stdClass(), 'type' => 'Disconnected']),
+        'userID' => 'user-id',
+    ];
+
+    app(HandleWebhookCallbackAction::class)->handle('env-disc', $envelope);
+
+    expect($device->fresh()->connected)->toBeFalse();
+    Event::assertDispatched(DeviceDisconnected::class);
+});
+
+it('unwraps the envelope and exposes nested event keys to MessageReceived', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'env-msg']);
+
+    $envelope = [
+        'instanceName' => 'instance-name',
+        'jsonData' => json_encode([
+            'event' => [
+                'Info' => [
+                    'RemoteJid' => '5511@s.whatsapp.net',
+                    'Sender' => ['User' => '5511999999999'],
+                ],
+                'Message' => ['conversation' => 'Hello via envelope'],
+            ],
+            'type' => 'Message',
+        ]),
+        'userID' => 'user-id',
+    ];
+
+    app(HandleWebhookCallbackAction::class)->handle('env-msg', $envelope);
+
+    Event::assertDispatched(MessageReceived::class, fn (MessageReceived $e) =>
+        $e->chatJid === '5511@s.whatsapp.net'
+            && $e->senderJid === '5511999999999'
+            && $e->content === 'Hello via envelope'
+    );
+});
+
+it('logs Unknown when the envelope jsonData is malformed', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'env-bad']);
+
+    $envelope = [
+        'instanceName' => 'instance-name',
+        'jsonData' => '{not valid json',
+        'userID' => 'user-id',
+    ];
+
+    app(HandleWebhookCallbackAction::class)->handle('env-bad', $envelope);
+
+    expect(WuzCallbackLog::count())->toBe(1);
+    expect(WuzCallbackLog::first()->event_type)->toBe('Unknown');
+});
