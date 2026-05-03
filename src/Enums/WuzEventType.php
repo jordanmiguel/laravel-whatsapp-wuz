@@ -136,12 +136,8 @@ enum WuzEventType: string
 
     public function shouldLog(?string $rawType = null): bool
     {
-        // Use null-coalesce, not config()'s default arg: a config key that is
-        // explicitly set to null (e.g. via config()->set in tests) returns null,
-        // which would TypeError into isAllowedBy(array $allowed). The ??
-        // pattern handles both "key absent" and "key set to null".
         return $this->isAllowedBy(
-            config('wuz.logging.event_types') ?? self::defaultLoggingTypes(),
+            $this->normalizeAllowed(config('wuz.logging.event_types'), self::defaultLoggingTypes()),
             $rawType,
         );
     }
@@ -149,9 +145,27 @@ enum WuzEventType: string
     public function shouldDispatch(?string $rawType = null): bool
     {
         return $this->isAllowedBy(
-            config('wuz.webhook_event.event_types') ?? self::defaultDispatchTypes(),
+            $this->normalizeAllowed(config('wuz.webhook_event.event_types'), self::defaultDispatchTypes()),
             $rawType,
         );
+    }
+
+    /**
+     * Falls back to defaults on null and lifts a scalar value into a single-entry list.
+     * Tolerates consumers writing `'event_types' => '*'` or `=> WuzEventType::CONNECTED`
+     * instead of wrapping in an array.
+     *
+     * @param  self|string|array<int, self|string>|null  $allowed
+     * @param  array<int, self>  $defaults
+     * @return array<int, self|string>
+     */
+    private function normalizeAllowed(self|string|array|null $allowed, array $defaults): array
+    {
+        if ($allowed === null) {
+            return $defaults;
+        }
+
+        return is_array($allowed) ? $allowed : [$allowed];
     }
 
     /**

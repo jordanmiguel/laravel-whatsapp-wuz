@@ -7,7 +7,7 @@ This guide walks through every breaking change.
 ## TL;DR
 
 - **Logging is now allowlisted.** Only ~12 event types are logged by default. `MESSAGE` is **not** in defaults — see "Selective logging" below.
-- **`WebhookReceived` dispatch is now allowlisted.** Only the four lifecycle types fire it by default.
+- **`WebhookReceived` dispatch is now allowlisted.** By default it fires for `MESSAGE`, `CONNECTED`, `DISCONNECTED`, and `LOGGED_OUT`.
 - **`WuzDeviceMessage` model + table are gone.** The package is now event-driven for messages: subscribe to `MessageReceived` (inbound) and `MessageSent` (outbound) to persist however you like.
 - **Auto media-download is gone.** Call `WuzService::downloadImage/downloadVideo/downloadDocument` from a `MessageReceived` listener if you need media.
 - **`SendMessageAction::handle()` returns `?array`** (the WUZ API response) instead of `?WuzDeviceMessage`.

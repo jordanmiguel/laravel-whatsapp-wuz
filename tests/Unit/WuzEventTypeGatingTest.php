@@ -83,3 +83,23 @@ it('shouldDispatch is symmetric with shouldLog', function () {
     expect(WuzEventType::CONNECTED->shouldDispatch())->toBeTrue();
     expect(WuzEventType::DISCONNECTED->shouldDispatch())->toBeFalse();
 });
+
+it('accepts a scalar wildcard config value', function () {
+    config()->set('wuz.logging.event_types', '*');
+    expect(WuzEventType::CHAT_PRESENCE->shouldLog())->toBeTrue();
+
+    config()->set('wuz.webhook_event.event_types', '*');
+    expect(WuzEventType::CHAT_PRESENCE->shouldDispatch())->toBeTrue();
+});
+
+it('accepts a scalar enum case as the config value', function () {
+    config()->set('wuz.logging.event_types', WuzEventType::CONNECTED);
+    expect(WuzEventType::CONNECTED->shouldLog())->toBeTrue();
+    expect(WuzEventType::DISCONNECTED->shouldLog())->toBeFalse();
+});
+
+it('accepts a scalar string as the config value', function () {
+    config()->set('wuz.webhook_event.event_types', 'Connected');
+    expect(WuzEventType::CONNECTED->shouldDispatch())->toBeTrue();
+    expect(WuzEventType::DISCONNECTED->shouldDispatch())->toBeFalse();
+});
