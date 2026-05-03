@@ -19,6 +19,8 @@ class HandleWebhookCallbackAction
             return;
         }
 
+        $payload = $this->unwrapEnvelope($payload);
+
         $rawType = is_string($payload['type'] ?? null) ? $payload['type'] : null;
         $eventType = WuzEventType::detect($payload);
 
@@ -119,5 +121,36 @@ class HandleWebhookCallbackAction
         } catch (\Throwable $e) {
             report($e);
         }
+    }
+
+    /**
+     * WUZ delivers callbacks as `{ instanceName, jsonData, userID }` where
+     * `jsonData` is a JSON-encoded `{ type, event }` body. Promote the
+     * inner event keys to the top level and surface `type` so the rest of
+     * the pipeline reads a flat shape. Returns the payload unchanged when
+     * no envelope is present (e.g. test fixtures).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function unwrapEnvelope(array $payload): array
+    {
+        if (! array_key_exists('jsonData', $payload)) {
+            return $payload;
+        }
+
+        $jsonData = $payload['jsonData'];
+
+        if (is_string($jsonData)) {
+            $jsonData = json_decode($jsonData, true);
+        }
+
+        if (! is_array($jsonData)) {
+            return $payload;
+        }
+
+        $event = is_array($jsonData['event'] ?? null) ? $jsonData['event'] : [];
+
+        return [...$event, 'type' => $jsonData['type'] ?? null];
     }
 }
