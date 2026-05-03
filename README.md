@@ -305,7 +305,7 @@ Incoming WhatsApp events are received at `POST /api/wuz/webhook/{token}` (config
 | **Disconnected** | Updates the device's connected state | `DeviceDisconnected` |
 | **LoggedOut** | Clears the device's JID and marks as disconnected | `DeviceDisconnected` |
 
-Allowed-by-default callbacks are logged in `wuz_callback_logs` and dispatched as `WebhookReceived`. Logging and dispatch are gated by the `wuz.logging.event_types` and `wuz.webhook_event.event_types` config keys — see the "Configuration — Selective Logging and Event-Driven Messages" section above.
+Logging and `WebhookReceived` dispatch are gated independently — both default sets are conservative but distinct (notably, `MESSAGE` dispatches by default but is **not** logged by default). See the "Configuration — Selective Logging and Event-Driven Messages" section above.
 
 ### Listening to Events
 

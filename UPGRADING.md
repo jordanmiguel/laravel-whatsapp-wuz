@@ -94,6 +94,23 @@ class StoreIncomingMessage
 
 For outbound, subscribe to `MessageSent` symmetrically.
 
+## `MessageReceived` constructor signature change
+
+v1: a single `WuzDeviceMessage` field — `public WuzDeviceMessage $message`.
+
+v2: flat parsed fields plus the raw payload:
+
+```php
+public readonly WuzDevice $device;
+public readonly string $type;       // 'text' | 'image' | 'video' | 'document'
+public readonly string $chatJid;
+public readonly ?string $senderJid;
+public readonly ?string $content;
+public readonly array $payload;     // raw WUZ webhook payload
+```
+
+Existing listeners reading `$event->message->...` will TypeError at runtime — rewrite them to read the flat fields directly. See the `StoreIncomingMessage` example in the "WuzDeviceMessage removal" section above.
+
 ## `SendMessageAction` return type change
 
 ```diff

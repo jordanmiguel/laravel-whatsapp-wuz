@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\HandleWebhookCallbackAction;
 use JordanMiguel\Wuz\Events\DeviceDisconnected;
@@ -21,6 +22,7 @@ function orderDevice(string $token = 't'): WuzDevice
 }
 
 it('does not propagate WebhookReceived listener exceptions', function () {
+    Exceptions::fake();
     config()->set('wuz.webhook_event.event_types', ['*']);
     Event::listen(WebhookReceived::class, fn () => throw new RuntimeException('boom'));
     $device = orderDevice();
@@ -28,18 +30,22 @@ it('does not propagate WebhookReceived listener exceptions', function () {
     app(HandleWebhookCallbackAction::class)->handle('t', ['type' => 'Disconnected']);
 
     expect($device->fresh()->connected)->toBeFalse();
+    Exceptions::assertReported(RuntimeException::class);
 });
 
 it('does not propagate DeviceDisconnected listener exceptions', function () {
+    Exceptions::fake();
     Event::listen(DeviceDisconnected::class, fn () => throw new RuntimeException('boom'));
     $device = orderDevice();
 
     app(HandleWebhookCallbackAction::class)->handle('t', ['type' => 'Disconnected']);
 
     expect($device->fresh()->connected)->toBeFalse();
+    Exceptions::assertReported(RuntimeException::class);
 });
 
 it('does not propagate MessageReceived listener exceptions and still inserts the log row when applicable', function () {
+    Exceptions::fake();
     config()->set('wuz.logging.event_types', ['*']);
     Event::listen(MessageReceived::class, fn () => throw new RuntimeException('boom'));
     orderDevice();
@@ -51,6 +57,7 @@ it('does not propagate MessageReceived listener exceptions and still inserts the
     ]);
 
     expect(WuzCallbackLog::count())->toBe(1);
+    Exceptions::assertReported(RuntimeException::class);
 });
 
 it('keeps state mutations on Disconnected even when log insert throws', function () {

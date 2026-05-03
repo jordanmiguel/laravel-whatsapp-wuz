@@ -35,7 +35,7 @@ it('defaultLoggingTypes contains lifecycle, pairing, error, and UNKNOWN types', 
     );
 });
 
-it('defaultDispatchTypes is the four lifecycle + MESSAGE types', function () {
+it('defaultDispatchTypes is MESSAGE plus the three lifecycle types', function () {
     expect(WuzEventType::defaultDispatchTypes())->toEqualCanonicalizing([
         WuzEventType::MESSAGE,
         WuzEventType::CONNECTED,
