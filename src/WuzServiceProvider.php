@@ -17,7 +17,6 @@ class WuzServiceProvider extends PackageServiceProvider
             ->hasConfigFile('wuz')
             ->hasMigrations([
                 'create_wuz_devices_table',
-                'create_wuz_device_messages_table',
                 'create_wuz_callback_logs_table',
                 'create_wuz_device_webhooks_table',
                 'create_wuz_phone_jids_table',

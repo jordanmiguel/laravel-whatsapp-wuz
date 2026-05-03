@@ -53,7 +53,6 @@ WUZ_ENABLED=true
 WUZ_API_URL=http://localhost:8080
 WUZ_ADMIN_TOKEN=your-admin-token
 WUZ_DEFAULT_COUNTRY_CODE=55
-WUZ_DOWNLOAD_MEDIA=false
 WUZ_DEBUG=false
 WUZ_DEBUG_TO=
 ```
@@ -64,7 +63,6 @@ WUZ_DEBUG_TO=
 | `WUZ_API_URL` | URL of your WuzAPI instance |
 | `WUZ_ADMIN_TOKEN` | Admin token for managing devices via the WuzAPI |
 | `WUZ_DEFAULT_COUNTRY_CODE` | Default country code for phone number normalization |
-| `WUZ_DOWNLOAD_MEDIA` | Automatically download media from incoming messages |
 | `WUZ_DEBUG` | Enable debug mode — redirects or skips all outgoing messages |
 | `WUZ_DEBUG_TO` | Phone number to redirect all messages to (leave empty to log-only) |
 
@@ -257,6 +255,44 @@ class ClientProfile extends Model
 
 The channel resolves the device by calling `resolveWuzOwner()` on the notifiable, then uses that owner's default device to send the message.
 
+## Configuration — Selective Logging and Event-Driven Messages
+
+`config/wuz.php` exposes two knobs for the webhook pipeline:
+
+```php
+'logging' => [
+    // Allowlist of event types to insert into wuz_callback_logs.
+    // Use ['*'] for all, [] for none, or any mix of WuzEventType cases / strings.
+    'event_types' => \JordanMiguel\Wuz\Enums\WuzEventType::defaultLoggingTypes(),
+],
+
+'webhook_event' => [
+    // Allowlist of event types that dispatch the generic WebhookReceived event.
+    'event_types' => \JordanMiguel\Wuz\Enums\WuzEventType::defaultDispatchTypes(),
+],
+```
+
+**Defaults are conservative.** `MESSAGE` is **not** logged by default — opt in if you want raw payload rows. Lifecycle, pairing, and error events are logged so you have a forensic trail when things break.
+
+**Inbound messages are event-driven.** Subscribe to `JordanMiguel\Wuz\Events\MessageReceived` and persist however your domain needs:
+
+```php
+class StoreIncomingMessage
+{
+    public function handle(\JordanMiguel\Wuz\Events\MessageReceived $event): void
+    {
+        // $event->device, $event->type, $event->chatJid,
+        // $event->senderJid, $event->content, $event->payload (raw)
+    }
+}
+```
+
+`MessageSent` fires symmetrically for outbound (HTTP 2xx WUZ responses only).
+
+For media: call `WuzService::downloadImage/downloadVideo/downloadDocument` from inside a `MessageReceived` listener. The package no longer auto-downloads.
+
+See `UPGRADING.md` for the v1→v2 migration guide.
+
 ## Webhooks & Events
 
 Incoming WhatsApp events are received at `POST /api/wuz/webhook/{token}` (configurable in `config/wuz.php`).
@@ -265,11 +301,11 @@ Incoming WhatsApp events are received at `POST /api/wuz/webhook/{token}` (config
 
 | Webhook Event | What Happens | Event Dispatched |
 |---------------|--------------|------------------|
-| **Message** | Stores the incoming message in `wuz_device_messages` | `MessageReceived` |
+| **Message** | Parses the payload and dispatches the typed event | `MessageReceived` |
 | **Disconnected** | Updates the device's connected state | `DeviceDisconnected` |
 | **LoggedOut** | Clears the device's JID and marks as disconnected | `DeviceDisconnected` |
 
-All callbacks also dispatch a `WebhookReceived` event and are logged in the `wuz_callback_logs` table.
+Logging and `WebhookReceived` dispatch are gated independently — both default sets are conservative but distinct (notably, `MESSAGE` dispatches by default but is **not** logged by default). See the "Configuration — Selective Logging and Event-Driven Messages" section above.
 
 ### Listening to Events
 
@@ -282,8 +318,12 @@ class HandleIncomingMessage
 {
     public function handle(MessageReceived $event): void
     {
-        $device = $event->device;
-        $message = $event->message;
+        $device    = $event->device;
+        $type      = $event->type;       // 'text' | 'image' | 'video' | 'document'
+        $chatJid   = $event->chatJid;
+        $senderJid = $event->senderJid;
+        $content   = $event->content;    // body text or media caption / filename
+        $payload   = $event->payload;    // raw WUZ webhook payload
         // Process incoming message...
     }
 }

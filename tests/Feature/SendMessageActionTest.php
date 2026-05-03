@@ -1,16 +1,21 @@
 <?php
 
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use JordanMiguel\Wuz\Actions\SendMessageAction;
 use JordanMiguel\Wuz\Data\SendMessageData;
+use JordanMiguel\Wuz\Events\MessageSent;
 use JordanMiguel\Wuz\Exceptions\WuzApiException;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Models\WuzDeviceMessage;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
 use JordanMiguel\Wuz\Tests\Fixtures\TestOwner;
 
-it('sends a text message and stores it', function () {
+beforeEach(function () {
+    Event::fake();
+});
+
+it('sends a text message and dispatches MessageSent', function () {
     Http::preventStrayRequests();
     Http::fake([
         '*/user/lid/*' => Http::response(['data' => ['jid' => '5511@s.whatsapp.net', 'lid' => 'lid123']], 200),
@@ -27,10 +32,14 @@ it('sends a text message and stores it', function () {
         message: 'Hello from test!',
     ));
 
-    expect($message)->toBeInstanceOf(WuzDeviceMessage::class);
-    expect($message->message)->toBe('Hello from test!');
-    expect($message->type)->toBe('text');
-    expect($message->wuz_device_id)->toBe($device->id);
+    expect($message)->toBeArray()
+        ->and($message['data']['id'] ?? null)->toBe('msg-1');
+
+    Event::assertDispatched(MessageSent::class, function (MessageSent $e) use ($device) {
+        return $e->device->id === $device->id
+            && $e->type === 'text'
+            && $e->content === 'Hello from test!';
+    });
 });
 
 it('normalizes phone and resolves JID', function () {
@@ -70,8 +79,11 @@ it('sends a button message', function () {
         buttons: [['buttonId' => '1', 'buttonText' => ['displayText' => 'Option 1']]],
     ));
 
-    expect($message->type)->toBe('button');
-    expect($message->message)->toBe('Choose an option');
+    expect($message)->toBeArray();
+
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) =>
+        $e->type === 'button' && $e->content === 'Choose an option'
+    );
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/chat/send/buttons'));
 });
@@ -113,8 +125,11 @@ it('redirects message to debug phone when WUZ_DEBUG is enabled', function () {
     ));
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/user/lid/552188888888'));
-    expect($message)->toBeInstanceOf(WuzDeviceMessage::class);
-    expect($message->message)->toBe('Hello debug!');
+    expect($message)->toBeArray();
+
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) =>
+        $e->phone === '552188888888' && $e->content === 'Hello debug!'
+    );
 });
 
 it('logs and skips sending when WUZ_DEBUG is enabled without WUZ_DEBUG_TO', function () {
@@ -137,7 +152,7 @@ it('logs and skips sending when WUZ_DEBUG is enabled without WUZ_DEBUG_TO', func
 
     Http::assertNothingSent();
     expect($result)->toBeNull();
-    expect(WuzDeviceMessage::count())->toBe(0);
+    Event::assertNotDispatched(MessageSent::class);
     Log::shouldHaveReceived('info')
         ->once()
         ->withArgs(fn ($msg, $context) => str_contains($msg, 'Wuz debug') && $context['phone'] === '5511999999999');
@@ -162,5 +177,6 @@ it('sends normally when WUZ_DEBUG is disabled', function () {
     ));
 
     Http::assertSent(fn ($request) => str_contains($request->url(), '/user/lid/551199999999'));
-    expect($message)->toBeInstanceOf(WuzDeviceMessage::class);
+    expect($message)->toBeArray();
+    Event::assertDispatched(MessageSent::class);
 });

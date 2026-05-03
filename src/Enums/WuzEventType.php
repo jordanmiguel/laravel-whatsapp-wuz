@@ -6,7 +6,6 @@ enum WuzEventType: string
 {
     case MESSAGE = 'Message';
     case UNDECRYPTABLE_MESSAGE = 'UndecryptableMessage';
-    case RECEIPT = 'Receipt';
     case READ_RECEIPT = 'ReadReceipt';
     case MEDIA_RETRY = 'MediaRetry';
     case GROUP_INFO = 'GroupInfo';
@@ -23,16 +22,12 @@ enum WuzEventType: string
     case CLIENT_OUTDATED = 'ClientOutdated';
     case TEMPORARY_BAN = 'TemporaryBan';
     case STREAM_ERROR = 'StreamError';
-    case STREAM_REPLACED = 'StreamReplaced';
     case PAIR_SUCCESS = 'PairSuccess';
     case PAIR_ERROR = 'PairError';
     case QR = 'QR';
-    case QR_SCANNED_WITHOUT_MULTIDEVICE = 'QRScannedWithoutMultidevice';
+    case QR_TIMEOUT = 'QRTimeout';
     case PRIVACY_SETTINGS = 'PrivacySettings';
-    case PUSH_NAME_SETTING = 'PushNameSetting';
     case USER_ABOUT = 'UserAbout';
-    case APP_STATE = 'AppState';
-    case APP_STATE_SYNC_COMPLETE = 'AppStateSyncComplete';
     case HISTORY_SYNC = 'HistorySync';
     case OFFLINE_SYNC_COMPLETED = 'OfflineSyncCompleted';
     case OFFLINE_SYNC_PREVIEW = 'OfflineSyncPreview';
@@ -44,13 +39,11 @@ enum WuzEventType: string
     case PRESENCE = 'Presence';
     case CHAT_PRESENCE = 'ChatPresence';
     case IDENTITY_CHANGE = 'IdentityChange';
-    case CAT_REFRESH_ERROR = 'CATRefreshError';
     case NEWSLETTER_JOIN = 'NewsletterJoin';
     case NEWSLETTER_LEAVE = 'NewsletterLeave';
     case NEWSLETTER_MUTE_CHANGE = 'NewsletterMuteChange';
     case NEWSLETTER_LIVE_UPDATE = 'NewsletterLiveUpdate';
     case FB_MESSAGE = 'FBMessage';
-    case ALL = 'All';
     case UNKNOWN = 'Unknown';
 
     public function label(): string
@@ -58,7 +51,6 @@ enum WuzEventType: string
         return match ($this) {
             self::MESSAGE => 'Message',
             self::UNDECRYPTABLE_MESSAGE => 'Undecryptable Message',
-            self::RECEIPT => 'Receipt',
             self::READ_RECEIPT => 'Read Receipt',
             self::MEDIA_RETRY => 'Media Retry',
             self::GROUP_INFO => 'Group Info',
@@ -75,16 +67,12 @@ enum WuzEventType: string
             self::CLIENT_OUTDATED => 'Client Outdated',
             self::TEMPORARY_BAN => 'Temporary Ban',
             self::STREAM_ERROR => 'Stream Error',
-            self::STREAM_REPLACED => 'Stream Replaced',
             self::PAIR_SUCCESS => 'Pair Success',
             self::PAIR_ERROR => 'Pair Error',
             self::QR => 'QR Code',
-            self::QR_SCANNED_WITHOUT_MULTIDEVICE => 'QR Scanned (No Multi-Device)',
+            self::QR_TIMEOUT => 'QR Timeout',
             self::PRIVACY_SETTINGS => 'Privacy Settings',
-            self::PUSH_NAME_SETTING => 'Push Name Setting',
             self::USER_ABOUT => 'User About',
-            self::APP_STATE => 'App State',
-            self::APP_STATE_SYNC_COMPLETE => 'App State Sync Complete',
             self::HISTORY_SYNC => 'History Sync',
             self::OFFLINE_SYNC_COMPLETED => 'Offline Sync Completed',
             self::OFFLINE_SYNC_PREVIEW => 'Offline Sync Preview',
@@ -96,13 +84,11 @@ enum WuzEventType: string
             self::PRESENCE => 'User Presence',
             self::CHAT_PRESENCE => 'Chat Presence',
             self::IDENTITY_CHANGE => 'Identity Change',
-            self::CAT_REFRESH_ERROR => 'CAT Refresh Error',
             self::NEWSLETTER_JOIN => 'Newsletter Joined',
             self::NEWSLETTER_LEAVE => 'Newsletter Left',
             self::NEWSLETTER_MUTE_CHANGE => 'Newsletter Mute Change',
             self::NEWSLETTER_LIVE_UPDATE => 'Newsletter Live Update',
             self::FB_MESSAGE => 'Facebook Message',
-            self::ALL => 'All Events',
             self::UNKNOWN => 'Unknown',
         };
     }
@@ -111,6 +97,102 @@ enum WuzEventType: string
     {
         $type = $data['type'] ?? null;
 
+        if (! is_string($type)) {
+            return self::UNKNOWN;
+        }
+
         return self::tryFrom($type) ?? self::UNKNOWN;
+    }
+
+    /** @return array<int, self> */
+    public static function defaultLoggingTypes(): array
+    {
+        return [
+            self::CONNECTED,
+            self::DISCONNECTED,
+            self::LOGGED_OUT,
+            self::PAIR_SUCCESS,
+            self::PAIR_ERROR,
+            self::QR,
+            self::QR_TIMEOUT,
+            self::CONNECT_FAILURE,
+            self::STREAM_ERROR,
+            self::TEMPORARY_BAN,
+            self::CLIENT_OUTDATED,
+            self::UNKNOWN,
+        ];
+    }
+
+    /** @return array<int, self> */
+    public static function defaultDispatchTypes(): array
+    {
+        return [
+            self::MESSAGE,
+            self::CONNECTED,
+            self::DISCONNECTED,
+            self::LOGGED_OUT,
+        ];
+    }
+
+    public function shouldLog(?string $rawType = null): bool
+    {
+        return $this->isAllowedBy(
+            $this->normalizeAllowed(config('wuz.logging.event_types'), self::defaultLoggingTypes()),
+            $rawType,
+        );
+    }
+
+    public function shouldDispatch(?string $rawType = null): bool
+    {
+        return $this->isAllowedBy(
+            $this->normalizeAllowed(config('wuz.webhook_event.event_types'), self::defaultDispatchTypes()),
+            $rawType,
+        );
+    }
+
+    /**
+     * Falls back to defaults on null and lifts a scalar value into a single-entry list.
+     * Tolerates consumers writing `'event_types' => '*'` or `=> WuzEventType::CONNECTED`
+     * instead of wrapping in an array.
+     *
+     * @param  self|string|array<int, self|string>|null  $allowed
+     * @param  array<int, self>  $defaults
+     * @return array<int, self|string>
+     */
+    private function normalizeAllowed(self|string|array|null $allowed, array $defaults): array
+    {
+        if ($allowed === null) {
+            return $defaults;
+        }
+
+        return is_array($allowed) ? $allowed : [$allowed];
+    }
+
+    /**
+     * @param  array<int, self|string>  $allowed
+     */
+    private function isAllowedBy(array $allowed, ?string $rawType): bool
+    {
+        if (in_array('*', $allowed, true)) {
+            return true;
+        }
+
+        foreach ($allowed as $entry) {
+            if ($entry instanceof self && $entry === $this) {
+                return true;
+            }
+
+            if (is_string($entry)) {
+                if ($entry === $this->value) {
+                    return true;
+                }
+
+                if ($rawType !== null && $entry === $rawType) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

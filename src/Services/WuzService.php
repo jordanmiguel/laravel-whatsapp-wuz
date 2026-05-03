@@ -5,6 +5,7 @@ namespace JordanMiguel\Wuz\Services;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use JordanMiguel\Wuz\Enums\WuzEventSubscription;
 use JordanMiguel\Wuz\Exceptions\WuzApiException;
 
 class WuzService
@@ -38,7 +39,7 @@ class WuzService
         return $this->request('post', '/admin/users', [
             'name' => $name,
             'token' => $token,
-            'events' => 'All',
+            'events' => WuzEventSubscription::ALL->value,
             'webhook' => $webhookUrl,
             'history' => $history ? 1 : 0,
         ]);
@@ -181,7 +182,7 @@ class WuzService
     {
         return $this->request('put', '/webhook', [
             'webhook' => $webhookUrl,
-            'events' => ['All'],
+            'events' => [WuzEventSubscription::ALL->value],
             'Active' => true,
         ]);
     }

@@ -46,11 +46,6 @@ class WuzDevice extends Model
         return $this->morphTo();
     }
 
-    public function messages(): HasMany
-    {
-        return $this->hasMany(WuzDeviceMessage::class, 'wuz_device_id');
-    }
-
     public function callbackLogs(): HasMany
     {
         return $this->hasMany(WuzCallbackLog::class, 'wuz_device_id');

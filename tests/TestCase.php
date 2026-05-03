@@ -42,9 +42,6 @@ class TestCase extends Orchestra
         $migration = include __DIR__ . '/../database/migrations/create_wuz_devices_table.php.stub';
         $migration->up();
 
-        $migration = include __DIR__ . '/../database/migrations/create_wuz_device_messages_table.php.stub';
-        $migration->up();
-
         $migration = include __DIR__ . '/../database/migrations/create_wuz_callback_logs_table.php.stub';
         $migration->up();
 
