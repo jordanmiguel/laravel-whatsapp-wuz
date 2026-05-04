@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\HandleWebhookCallbackAction;
+use JordanMiguel\Wuz\Events\DeviceConnected;
 use JordanMiguel\Wuz\Events\DeviceDisconnected;
 use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
@@ -61,6 +62,18 @@ it('handles DISCONNECTED events', function () {
 
     expect($device->fresh()->connected)->toBeFalse();
     Event::assertDispatched(DeviceDisconnected::class);
+});
+
+it('handles CONNECTED events', function () {
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create(['token' => 'conn-token']);
+
+    expect($device->connected)->toBeFalse();
+
+    app(HandleWebhookCallbackAction::class)->handle('conn-token', ['type' => 'Connected']);
+
+    expect($device->fresh()->connected)->toBeTrue();
+    Event::assertDispatched(DeviceConnected::class, fn (DeviceConnected $e) => $e->device->id === $device->id);
 });
 
 it('handles LOGGED_OUT events and clears JID', function () {
