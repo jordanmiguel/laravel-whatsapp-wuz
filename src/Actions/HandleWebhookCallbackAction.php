@@ -3,6 +3,7 @@
 namespace JordanMiguel\Wuz\Actions;
 
 use JordanMiguel\Wuz\Enums\WuzEventType;
+use JordanMiguel\Wuz\Events\DeviceConnected;
 use JordanMiguel\Wuz\Events\DeviceDisconnected;
 use JordanMiguel\Wuz\Events\MessageReceived;
 use JordanMiguel\Wuz\Events\WebhookReceived;
@@ -27,6 +28,7 @@ class HandleWebhookCallbackAction
         // 1. Run state-mutating side effects FIRST (the package's behavioural job).
         match ($eventType) {
             WuzEventType::MESSAGE => $this->handleMessage($device, $payload),
+            WuzEventType::CONNECTED => $this->handleConnected($device),
             WuzEventType::DISCONNECTED => $this->handleDisconnected($device),
             WuzEventType::LOGGED_OUT => $this->handleLoggedOut($device),
             default => null,
@@ -66,6 +68,13 @@ class HandleWebhookCallbackAction
         [$type, $content] = $this->parseMessage($message);
 
         $event = new MessageReceived($device, $type, $chatJid, $senderJid, $content, $payload);
+        $this->safely(fn () => event($event));
+    }
+
+    private function handleConnected(WuzDevice $device): void
+    {
+        $device->update(['connected' => true]);
+        $event = new DeviceConnected($device);
         $this->safely(fn () => event($event));
     }
 
