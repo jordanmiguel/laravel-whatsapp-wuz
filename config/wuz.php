@@ -33,4 +33,11 @@ return [
         'device_webhooks' => 'wuz_device_webhooks',
         'phone_jids' => 'wuz_phone_jids',
     ],
+
+    'proxy' => [
+        // When setting a per-device proxy fails during reconnect, connect directly
+        // (no proxy) instead of staying disconnected. Off by default because a direct
+        // connect exposes the server IP and can get the WhatsApp account banned.
+        'connect_directly_on_failure' => env('WUZ_PROXY_CONNECT_DIRECTLY_ON_FAILURE', false),
+    ],
 ];

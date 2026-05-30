@@ -34,15 +34,21 @@ class WuzService
         return $this->request('get', '/admin/users');
     }
 
-    public function addUser(string $name, string $token, string $webhookUrl, bool $history = false): array
+    public function addUser(string $name, string $token, string $webhookUrl, bool $history = false, ?string $proxyUrl = null): array
     {
-        return $this->request('post', '/admin/users', [
+        $payload = [
             'name' => $name,
             'token' => $token,
             'events' => WuzEventSubscription::ALL->value,
             'webhook' => $webhookUrl,
             'history' => $history ? 1 : 0,
-        ]);
+        ];
+
+        if ($proxyUrl !== null && trim($proxyUrl) !== '') {
+            $payload['proxyConfig'] = ['enabled' => true, 'proxyURL' => $proxyUrl];
+        }
+
+        return $this->request('post', '/admin/users', $payload);
     }
 
     public function showUser(string $id): array
@@ -82,6 +88,34 @@ class WuzService
     public function sessionQr(): array
     {
         return $this->request('get', '/session/qr');
+    }
+
+    public function setSessionProxy(string $proxyUrl): array
+    {
+        // Posts the proxy config only; the caller must disconnect first, since WuzAPI
+        // rejects proxy changes on a connected session (see reconnectWithProxy). Body is
+        // snake_case (enable/proxy_url), unlike addUser's camelCase proxyConfig.proxyURL.
+        return $this->request('post', '/session/proxy', ['enable' => true, 'proxy_url' => $proxyUrl]);
+    }
+
+    public function reconnectWithProxy(string $proxyUrl): array
+    {
+        $this->sessionDisconnect();
+
+        try {
+            $this->setSessionProxy($proxyUrl);
+        } catch (WuzApiException $e) {
+            // By default stay disconnected rather than connect without the proxy:
+            // a direct connect exposes the server IP and risks a ban. Operators can
+            // opt into the fallback via wuz.proxy.connect_directly_on_failure.
+            if (! config('wuz.proxy.connect_directly_on_failure')) {
+                throw $e;
+            }
+
+            Log::warning('Wuz proxy set failed; connecting directly: ' . $e->getMessage());
+        }
+
+        return $this->sessionConnect();
     }
 
     // ── Phone methods ──────────────────────────────────────────────

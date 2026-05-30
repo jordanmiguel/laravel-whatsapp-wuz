@@ -16,6 +16,7 @@ class WuzDevice extends Model
     {
         return WuzDeviceFactory::new();
     }
+
     protected $fillable = [
         'owner_type',
         'owner_id',
@@ -26,6 +27,8 @@ class WuzDevice extends Model
         'jid',
         'is_default',
         'created_by',
+        'proxy_url',
+        'proxy_session',
     ];
 
     protected function casts(): array
@@ -33,6 +36,7 @@ class WuzDevice extends Model
         return [
             'connected' => 'boolean',
             'is_default' => 'boolean',
+            'proxy_url' => 'encrypted',
         ];
     }
 
