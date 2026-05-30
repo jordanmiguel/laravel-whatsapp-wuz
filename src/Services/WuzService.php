@@ -34,15 +34,21 @@ class WuzService
         return $this->request('get', '/admin/users');
     }
 
-    public function addUser(string $name, string $token, string $webhookUrl, bool $history = false): array
+    public function addUser(string $name, string $token, string $webhookUrl, bool $history = false, ?string $proxyUrl = null): array
     {
-        return $this->request('post', '/admin/users', [
+        $payload = [
             'name' => $name,
             'token' => $token,
             'events' => WuzEventSubscription::ALL->value,
             'webhook' => $webhookUrl,
             'history' => $history ? 1 : 0,
-        ]);
+        ];
+
+        if ($proxyUrl !== null && trim($proxyUrl) !== '') {
+            $payload['proxyConfig'] = ['enabled' => true, 'proxyURL' => $proxyUrl];
+        }
+
+        return $this->request('post', '/admin/users', $payload);
     }
 
     public function showUser(string $id): array
