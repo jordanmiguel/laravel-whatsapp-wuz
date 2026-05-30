@@ -17,6 +17,8 @@ return new class extends Migration
             $table->text('token')->nullable();
             $table->boolean('connected')->default(false);
             $table->string('jid', 255)->nullable();
+            $table->text('proxy_url')->nullable();
+            $table->string('proxy_session', 16)->nullable();
             $table->boolean('is_default')->default(false);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
