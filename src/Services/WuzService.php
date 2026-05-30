@@ -90,6 +90,21 @@ class WuzService
         return $this->request('get', '/session/qr');
     }
 
+    public function setSessionProxy(string $proxyUrl): array
+    {
+        // WuzAPI rejects setting a proxy on a CONNECTED session — always disconnect first.
+        // The server requires an explicit enable flag alongside the url.
+        return $this->request('post', '/session/proxy', ['enable' => true, 'proxy_url' => $proxyUrl]);
+    }
+
+    public function reconnectWithProxy(string $proxyUrl): array
+    {
+        $this->sessionDisconnect();
+        $this->setSessionProxy($proxyUrl);
+
+        return $this->sessionConnect();
+    }
+
     // ── Phone methods ──────────────────────────────────────────────
 
     public function phoneToJid(string $phone): array
