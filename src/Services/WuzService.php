@@ -92,15 +92,28 @@ class WuzService
 
     public function setSessionProxy(string $proxyUrl): array
     {
-        // WuzAPI rejects setting a proxy on a CONNECTED session — always disconnect first.
-        // The server requires an explicit enable flag alongside the url.
+        // Posts the proxy config only; the caller must disconnect first, since WuzAPI
+        // rejects proxy changes on a connected session (see reconnectWithProxy). Body is
+        // snake_case (enable/proxy_url), unlike addUser's camelCase proxyConfig.proxyURL.
         return $this->request('post', '/session/proxy', ['enable' => true, 'proxy_url' => $proxyUrl]);
     }
 
     public function reconnectWithProxy(string $proxyUrl): array
     {
         $this->sessionDisconnect();
-        $this->setSessionProxy($proxyUrl);
+
+        try {
+            $this->setSessionProxy($proxyUrl);
+        } catch (WuzApiException $e) {
+            // By default stay disconnected rather than connect without the proxy:
+            // a direct connect exposes the server IP and risks a ban. Operators can
+            // opt into the fallback via wuz.proxy.connect_directly_on_failure.
+            if (! config('wuz.proxy.connect_directly_on_failure')) {
+                throw $e;
+            }
+
+            Log::warning('Wuz proxy set failed; connecting directly: ' . $e->getMessage());
+        }
 
         return $this->sessionConnect();
     }
