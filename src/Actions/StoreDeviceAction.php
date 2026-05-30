@@ -26,6 +26,7 @@ class StoreDeviceAction
                 name: $data->name,
                 token: $token,
                 webhookUrl: $webhookUrl,
+                proxyUrl: $data->proxyUrl,
             );
 
             $isFirst = $owner->wuzDevices()->count() === 0;
@@ -36,6 +37,8 @@ class StoreDeviceAction
                 'token' => $token,
                 'is_default' => $isFirst,
                 'created_by' => $createdBy,
+                'proxy_url' => $data->proxyUrl,
+                'proxy_session' => $data->proxySession,
             ]);
 
             $this->connectAction->handle($device);
