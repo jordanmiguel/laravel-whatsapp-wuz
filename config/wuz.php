@@ -25,6 +25,10 @@ return [
 
     'phone' => [
         'default_country_code' => env('WUZ_DEFAULT_COUNTRY_CODE', '55'),
+
+        // How long a "not on WhatsApp" result stays cached before it is re-checked.
+        // Prevents repeated /user/lid 404 lookups for the same unregistered number.
+        'unregistered_ttl_days' => env('WUZ_UNREGISTERED_TTL_DAYS', 14),
     ],
 
     'table_names' => [
