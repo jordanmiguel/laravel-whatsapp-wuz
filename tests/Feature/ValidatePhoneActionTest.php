@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Http;
 use JordanMiguel\Wuz\Actions\ValidatePhoneAction;
 use JordanMiguel\Wuz\Data\ValidatedPhone;
+use JordanMiguel\Wuz\Exceptions\PhoneNotRegisteredException;
 use JordanMiguel\Wuz\Exceptions\WuzApiException;
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Models\WuzPhoneJid;
@@ -155,4 +156,85 @@ it('throws when both Brazilian attempts fail', function () {
         expect($e->getMessage())->toContain('551199999999');
         expect($e->getMessage())->toContain('5511999999999');
     }
+});
+
+it('throws PhoneNotRegisteredException (a WuzApiException) for unregistered numbers', function () {
+    Http::fake([
+        '*/user/lid/*' => Http::response('Not found', 404),
+    ]);
+
+    $action = app(ValidatePhoneAction::class);
+
+    try {
+        $action->handle(makeWuzService(), '+441234567890');
+        $this->fail('Expected PhoneNotRegisteredException');
+    } catch (WuzApiException $e) {
+        expect($e)->toBeInstanceOf(PhoneNotRegisteredException::class);
+    }
+});
+
+it('negative-caches an unregistered Brazilian number and skips the API within TTL', function () {
+    Http::fake([
+        '*/user/lid/551199999999' => Http::response('Not found', 404),
+        '*/user/lid/5511999999999' => Http::response('Not found', 404),
+    ]);
+
+    $action = app(ValidatePhoneAction::class);
+    $wuz = makeWuzService();
+
+    try {
+        $action->handle($wuz, '5511999999999');
+        $this->fail('Expected PhoneNotRegisteredException on first lookup');
+    } catch (PhoneNotRegisteredException) {
+        // expected — both forms 404'd and are now negative-cached
+    }
+
+    // The number would resolve if queried now; the negative cache must short-circuit
+    // so the API is never consulted and it still reports unregistered.
+    Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => 'now@s.whatsapp.net', 'lid' => 'x']], 200),
+    ]);
+
+    try {
+        $action->handle($wuz, '5511999999999');
+        $this->fail('Negative cache should short-circuit before hitting the API');
+    } catch (PhoneNotRegisteredException) {
+        // expected — served from the negative cache, API not consulted
+    }
+
+    // Both forms were recorded as negative (null jid) so future lookups short-circuit.
+    expect(WuzPhoneJid::where('phone', '551199999999')->first()?->jid)->toBeNull();
+    expect(WuzPhoneJid::where('phone', '5511999999999')->first()?->jid)->toBeNull();
+});
+
+it('re-checks an unregistered number once the TTL has elapsed', function () {
+    // A negative-cache entry last checked well beyond the TTL window. Aged via the raw
+    // query builder so Eloquent's auto-timestamp does not reset updated_at to now.
+    WuzPhoneJid::create(['phone' => '441234567890', 'jid' => null, 'lid' => null]);
+    \Illuminate\Support\Facades\DB::table((new WuzPhoneJid)->getTable())
+        ->where('phone', '441234567890')
+        ->update(['updated_at' => now()->subDays((int) config('wuz.phone.unregistered_ttl_days', 14) + 7)->toDateTimeString()]);
+
+    Http::fake([
+        '*/user/lid/*' => Http::response(['data' => ['jid' => 'back@s.whatsapp.net', 'lid' => 'y']], 200),
+    ]);
+
+    $result = app(ValidatePhoneAction::class)->handle(makeWuzService(), '+441234567890');
+
+    expect($result->jid)->toBe('back@s.whatsapp.net');
+    expect(WuzPhoneJid::where('phone', '441234567890')->first()->jid)->toBe('back@s.whatsapp.net');
+});
+
+it('does not negative-cache a transient (non-404) failure', function () {
+    Http::fake([
+        '*/user/lid/441234567890' => Http::response('boom', 500),
+    ]);
+
+    $action = app(ValidatePhoneAction::class);
+
+    expect(fn () => app(ValidatePhoneAction::class)->handle(makeWuzService(), '+441234567890'))
+        ->toThrow(WuzApiException::class);
+
+    // A 500 is transient: no row should be written, so the next attempt retries the API.
+    expect(WuzPhoneJid::where('phone', '441234567890')->first())->toBeNull();
 });

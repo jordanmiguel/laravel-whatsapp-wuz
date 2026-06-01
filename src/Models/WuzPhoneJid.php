@@ -4,6 +4,14 @@ namespace JordanMiguel\Wuz\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $phone
+ * @property string|null $jid
+ * @property string|null $lid
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ */
 class WuzPhoneJid extends Model
 {
     protected $fillable = [
