@@ -16,6 +16,9 @@ return new class extends Migration
             $table->string('name', 255);
             $table->text('token')->nullable();
             $table->boolean('connected')->default(false);
+            // Null while connected (and while never yet paired). See the add_disconnected_at
+            // migration for why a bare boolean cannot answer "is this session coming back?".
+            $table->timestamp('disconnected_at')->nullable();
             $table->string('jid', 255)->nullable();
             $table->text('proxy_url')->nullable();
             $table->string('proxy_session', 16)->nullable();
