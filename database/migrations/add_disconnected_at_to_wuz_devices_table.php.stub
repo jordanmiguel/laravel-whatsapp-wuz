@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $table = config('wuz.table_names.devices', 'wuz_devices');
+
+        Schema::table($table, function (Blueprint $blueprint) {
+            // `connected` says a session is down; it never said since when. Only elapsed time
+            // separates a dropped socket (whatsmeow reconnects within seconds) from an unlinked
+            // phone (never comes back), and WuzAPI reports both as `loggedIn: false`.
+            $blueprint->timestamp('disconnected_at')->nullable()->after('connected');
+        });
+
+        // Best-effort backfill: the last time a currently-down device changed state is the
+        // closest thing to a disconnect timestamp we can recover. A device that has never been
+        // connected keeps a null, which is what distinguishes "never paired" from "down".
+        DB::table($table)
+            ->where('connected', false)
+            ->whereNotNull('jid')
+            ->update(['disconnected_at' => DB::raw('updated_at')]);
+    }
+
+    public function down(): void
+    {
+        Schema::table(config('wuz.table_names.devices', 'wuz_devices'), function (Blueprint $blueprint) {
+            $blueprint->dropColumn('disconnected_at');
+        });
+    }
+};

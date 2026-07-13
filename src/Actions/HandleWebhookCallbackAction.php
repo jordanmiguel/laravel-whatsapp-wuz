@@ -73,21 +73,27 @@ class HandleWebhookCallbackAction
 
     private function handleConnected(WuzDevice $device): void
     {
-        $device->update(['connected' => true]);
+        $device->markConnected();
         $event = new DeviceConnected($device);
         $this->safely(fn () => event($event));
     }
 
+    /**
+     * whatsmeow emits this on every dropped socket and reconnects on its own seconds later, all
+     * while WhatsApp still considers the session logged in — so this is "the line went quiet",
+     * not "the phone is gone". Consumers deciding whether to give up should read
+     * `disconnected_at`, not this event.
+     */
     private function handleDisconnected(WuzDevice $device): void
     {
-        $device->update(['connected' => false]);
+        $device->markDisconnected();
         $event = new DeviceDisconnected($device);
         $this->safely(fn () => event($event));
     }
 
     private function handleLoggedOut(WuzDevice $device): void
     {
-        $device->update(['connected' => false, 'jid' => null]);
+        $device->markDisconnected(unlinked: true);
         $event = new DeviceDisconnected($device);
         $this->safely(fn () => event($event));
     }

@@ -20,6 +20,7 @@ class WuzServiceProvider extends PackageServiceProvider
                 'create_wuz_callback_logs_table',
                 'create_wuz_device_webhooks_table',
                 'create_wuz_phone_jids_table',
+                'add_disconnected_at_to_wuz_devices_table',
             ])
             ->hasRoute('webhook');
     }
