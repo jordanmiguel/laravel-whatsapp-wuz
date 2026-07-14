@@ -6,35 +6,25 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use JordanMiguel\Wuz\Data\StoreDeviceData;
 use JordanMiguel\Wuz\Models\WuzDevice;
-use JordanMiguel\Wuz\Services\WuzServiceFactory;
 
 class StoreDeviceAction
 {
     public function __construct(
-        private readonly WuzServiceFactory $factory,
+        private readonly RegisterDeviceAtGatewayAction $register,
         private readonly ConnectDeviceAction $connectAction,
     ) {}
 
     public function handle(Model $owner, StoreDeviceData $data, ?int $createdBy = null): WuzDevice
     {
         return DB::transaction(function () use ($owner, $data, $createdBy) {
-            $token = 'device-' . uniqid() . time();
-
-            $webhookUrl = route('wuz.webhook', ['token' => $token]);
-
-            $result = $this->factory->admin()->addUser(
-                name: $data->name,
-                token: $token,
-                webhookUrl: $webhookUrl,
-                proxyUrl: $data->proxyUrl,
-            );
+            $credentials = $this->register->handle($data->name, $data->proxyUrl);
 
             $isFirst = $owner->wuzDevices()->count() === 0;
 
             $device = $owner->wuzDevices()->create([
-                'device_id' => $result['data']['id'] ?? null,
+                'device_id' => $credentials->deviceId,
                 'name' => $data->name,
-                'token' => $token,
+                'token' => $credentials->token,
                 'is_default' => $isFirst,
                 'created_by' => $createdBy,
                 'proxy_url' => $data->proxyUrl,
