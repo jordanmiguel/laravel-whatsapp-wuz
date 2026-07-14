@@ -10,6 +10,6 @@ class GatewayUserData extends Data
         /** The device's identity at WuzAPI, and the path segment of its webhook URL. */
         public readonly string $token,
         /** WuzAPI's own id for the user, which the admin endpoints address it by. */
-        public readonly ?string $deviceId,
+        public readonly string $deviceId,
     ) {}
 }

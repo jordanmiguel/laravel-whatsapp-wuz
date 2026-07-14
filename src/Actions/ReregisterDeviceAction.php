@@ -20,6 +20,10 @@ class ReregisterDeviceAction
      * callback history, all of which cascades on delete, and that history must not be the price of
      * repairing a pairing. The old user is gone, so the session goes with it: the device comes
      * back unpaired, ready for a QR.
+     *
+     * Both identifiers are replaced, never merged. The old device_id names a user the gateway does
+     * not have — that is the premise of the repair — so carrying it over would leave the device
+     * addressing a ghost through the admin endpoints.
      */
     public function handle(WuzDevice $device): void
     {
