@@ -26,11 +26,16 @@ class GetDeviceStatusAction
      *
      * `loggedIn` is therefore what `WuzDevice::$connected` mirrors: "this session is still ours".
      *
+     * $withQr is for callers with a human watching the pairing screen — only they can use a QR.
+     * Background reconcilers must leave it off: an idle session has no QR to serve, and asking
+     * WuzAPI for one anyway earns a "no session" error every poll. Even when asked for, the QR
+     * is only fetched while the socket is up — before that, WuzAPI has nothing to answer with.
+     *
      * @throws \JordanMiguel\Wuz\Exceptions\WuzApiException when WuzAPI cannot be reached. An API
      *                                                      that did not answer is not a device that logged out, and a caller repairing state
      *                                                      must be able to tell those apart before it acts on the difference.
      */
-    public function handle(WuzDevice $device): DeviceStatusData
+    public function handle(WuzDevice $device, bool $withQr = false): DeviceStatusData
     {
         $wuz = $this->factory->make($device);
 
@@ -58,7 +63,7 @@ class GetDeviceStatusAction
             DeviceConnected::dispatch($device);
         }
 
-        $qrCode = $loggedIn ? null : $this->qrCode($wuz);
+        $qrCode = $withQr && ! $loggedIn && $socketConnected ? $this->qrCode($wuz) : null;
 
         return new DeviceStatusData(
             id: $device->id,
