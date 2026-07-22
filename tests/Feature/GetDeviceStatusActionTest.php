@@ -34,9 +34,9 @@ it('returns connected status when device is logged in', function () {
     Event::assertDispatched(DeviceConnected::class);
 });
 
-it('returns QR status when device needs pairing', function () {
+it('returns QR status when the caller asks for one and pairing is underway', function () {
     Http::fake([
-        '*/session/status' => Http::response(['data' => ['loggedIn' => false, 'jid' => null]], 200),
+        '*/session/status' => Http::response(['data' => ['loggedIn' => false, 'connected' => true, 'jid' => null]], 200),
         '*/webhook' => Http::response(['success' => true], 200),
         '*/session/qr' => Http::response(['data' => ['QRCode' => 'base64-qr-data']], 200),
     ]);
@@ -45,10 +45,42 @@ it('returns QR status when device needs pairing', function () {
     $device = WuzDevice::factory()->for($owner, 'owner')->create();
 
     $action = app(GetDeviceStatusAction::class);
-    $result = $action->handle($device);
+    $result = $action->handle($device, withQr: true);
 
     expect($result->status)->toBe('qr');
     expect($result->qr_code)->toBe('base64-qr-data');
+});
+
+it('does not request a QR unless the caller asks for one', function () {
+    Http::fake([
+        '*/session/status' => Http::response(['data' => ['loggedIn' => false, 'connected' => true, 'jid' => null]], 200),
+        '*/webhook' => Http::response(['success' => true], 200),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
+
+    $result = app(GetDeviceStatusAction::class)->handle($device);
+
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/session/qr'));
+    expect($result->qr_code)->toBeNull();
+    expect($result->status)->toBe('disconnected');
+});
+
+it('does not request a QR while the socket is not up, where WuzAPI can only answer "no session"', function () {
+    Http::fake([
+        '*/session/status' => Http::response(['data' => ['loggedIn' => false, 'connected' => false, 'jid' => null]], 200),
+        '*/webhook' => Http::response(['success' => true], 200),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->create();
+
+    $result = app(GetDeviceStatusAction::class)->handle($device, withQr: true);
+
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), '/session/qr'));
+    expect($result->qr_code)->toBeNull();
+    expect($result->status)->toBe('disconnected');
 });
 
 it('updates device connected state in database', function () {
