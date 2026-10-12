@@ -3,6 +3,7 @@
 namespace JordanMiguel\Wuz\Actions;
 
 use JordanMiguel\Wuz\Data\DeviceStatusData;
+use JordanMiguel\Wuz\Enums\WuzEventSubscription;
 use JordanMiguel\Wuz\Events\DeviceConnected;
 use JordanMiguel\Wuz\Models\WuzDevice;
 use JordanMiguel\Wuz\Services\WuzService;
@@ -41,11 +42,15 @@ class GetDeviceStatusAction
 
         $data = $wuz->sessionStatus();
 
-        try {
-            $wuz->setWebhookEvents(route('wuz.webhook', ['token' => $device->token]));
-        } catch (\Exception) {
-            // Re-arming the subscription is opportunistic; failing at it must not cost us the
-            // status we just read successfully.
+        $webhookUrl = route('wuz.webhook', ['token' => $device->token]);
+
+        if (! $this->subscribed($data['data'] ?? [], $webhookUrl)) {
+            try {
+                $wuz->setWebhookEvents($webhookUrl);
+            } catch (\Exception) {
+                // Re-arming the subscription is opportunistic; failing at it must not cost us the
+                // status we just read successfully.
+            }
         }
 
         $wasConnected = $device->connected;
@@ -75,6 +80,20 @@ class GetDeviceStatusAction
             status: $loggedIn ? 'connected' : ($qrCode ? 'qr' : 'disconnected'),
             disconnected_at: $device->disconnected_at?->toIso8601String(),
         );
+    }
+
+    /**
+     * The status already reports the subscription, so a correct one is left alone: rewriting it
+     * on every poll was a PUT per status call. A WuzAPI that does not report it gets re-armed.
+     *
+     * @param  array<string, mixed>  $status
+     */
+    private function subscribed(array $status, string $webhookUrl): bool
+    {
+        $events = array_map('trim', explode(',', (string) ($status['events'] ?? '')));
+
+        return ($status['webhook'] ?? null) === $webhookUrl
+            && in_array(WuzEventSubscription::ALL->value, $events, true);
     }
 
     private function qrCode(WuzService $wuz): ?string

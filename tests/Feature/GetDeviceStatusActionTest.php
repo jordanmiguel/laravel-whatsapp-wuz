@@ -99,3 +99,52 @@ it('updates device connected state in database', function () {
     expect($device->fresh()->connected)->toBeTrue();
     expect($device->fresh()->jid)->toBe('jid123');
 });
+
+describe('webhook subscription', function () {
+    function statusWithSubscription(WuzDevice $device, ?string $webhook, ?string $events): array
+    {
+        return ['data' => array_filter([
+            'loggedIn' => true,
+            'connected' => true,
+            'jid' => '5511@s.whatsapp.net',
+            'webhook' => $webhook,
+            'events' => $events,
+        ], fn ($value) => $value !== null)];
+    }
+
+    function expectedWebhook(WuzDevice $device): string
+    {
+        return route('wuz.webhook', ['token' => $device->token]);
+    }
+
+    it('leaves a correct subscription alone instead of rewriting it on every poll', function () {
+        $device = WuzDevice::factory()->for(TestOwner::create(['name' => 'Test']), 'owner')->create();
+        Http::fake([
+            '*/session/status' => Http::response(statusWithSubscription($device, expectedWebhook($device), 'All'), 200),
+            '*/webhook' => Http::response(['success' => true], 200), // faked so a rewrite would be recorded, not swallowed
+        ]);
+
+        app(GetDeviceStatusAction::class)->handle($device);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/webhook'));
+    });
+
+    it('re-arms the subscription when WuzAPI reports something else', function (?string $webhook, ?string $events) {
+        $device = WuzDevice::factory()->for(TestOwner::create(['name' => 'Test']), 'owner')->create();
+        Http::fake([
+            '*/session/status' => Http::response(statusWithSubscription($device, $webhook, $events), 200),
+            '*/webhook' => Http::response(['success' => true], 200),
+        ]);
+
+        app(GetDeviceStatusAction::class)->handle($device);
+
+        Http::assertSent(fn ($request) => $request->method() === 'PUT'
+            && str_contains($request->url(), '/webhook')
+            && $request['webhook'] === expectedWebhook($device));
+    })->with([
+        'another url' => ['https://old.example.test/api/wuz/webhook/stale', 'All'],
+        'no url' => ['', 'All'],
+        'narrower events' => [null, 'Message,ReadReceipt'],
+        'a WuzAPI that does not report the subscription' => [null, null],
+    ]);
+});
