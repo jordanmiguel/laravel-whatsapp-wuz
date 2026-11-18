@@ -127,7 +127,7 @@ class WuzService
 
     public function isPhoneRegistered(array $phones): array
     {
-        return $this->request('post', '/user/check/', [
+        return $this->request('post', '/user/check', [
             'Phone' => $phones,
         ]);
     }

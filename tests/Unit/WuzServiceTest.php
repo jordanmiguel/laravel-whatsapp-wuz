@@ -114,6 +114,18 @@ it('resolves phone to JID', function () {
     expect($result['data']['jid'])->toBe('5511@s.whatsapp.net');
 });
 
+it('checks registration on the route WuzAPI serves, without a trailing slash', function () {
+    Http::fake([
+        'http://wuz.test/user/check' => Http::response(['data' => ['Users' => []]], 200),
+    ]);
+
+    $service = new WuzService(apiUrl: 'http://wuz.test', userToken: 'user-token');
+    $service->isPhoneRegistered(['551199999999']);
+
+    Http::assertSent(fn ($request) => $request->url() === 'http://wuz.test/user/check'
+        && $request['Phone'] === ['551199999999']);
+});
+
 it('sets webhook events', function () {
     Http::fake([
         '*/webhook' => Http::response(['success' => true], 200),

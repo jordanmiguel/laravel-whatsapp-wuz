@@ -71,6 +71,7 @@ it('throws when phone validation fails so NotificationFailed fires', function ()
     Http::preventStrayRequests();
     Http::fake([
         '*/user/lid/*' => Http::response('Not found', 404),
+        '*/user/check' => Http::response(['data' => ['Users' => [['Query' => '441234567890', 'IsInWhatsapp' => false, 'JID' => '']]]], 200),
     ]);
 
     $owner = TestOwner::create(['name' => 'Test']);
