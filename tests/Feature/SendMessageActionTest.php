@@ -104,6 +104,55 @@ it('throws when phone is not registered on WhatsApp', function () {
     ));
 })->throws(WuzApiException::class);
 
+// WhatsApp may confirm only the non-canonical Brazilian form, answering with the LID alone.
+// The session maps that LID to the canonical number, so sending to the queried form fails
+// ("no LID found for … from server"): the LID is the only address that is known to work.
+it('sends to the LID when WhatsApp confirmed the number only by its LID', function () {
+    Http::preventStrayRequests();
+    Http::fake([
+        '*/user/lid/*' => Http::response('Not found', 404),
+        '*/user/check' => Http::response(['data' => ['Users' => [
+            ['Query' => '5538999037449', 'IsInWhatsapp' => true, 'JID' => '243808616845420@lid', 'VerifiedName' => ''],
+        ]]], 200),
+        '*/chat/send/text' => Http::response(['data' => ['sent' => true, 'id' => 'msg-1']], 200),
+    ]);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
+
+    app(SendMessageAction::class)->handle($device, new SendMessageData(phone: '5538999037449', message: 'Oi'));
+
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/chat/send/text')
+        && $request['Phone'] === '243808616845420@lid');
+    Event::assertDispatched(MessageSent::class, fn (MessageSent $e) => $e->phone === '5538999037449');
+});
+
+it('sends to the cached LID when the number is known only by it', function () {
+    Http::preventStrayRequests();
+    Http::fake(['*/chat/send/text' => Http::response(['data' => ['sent' => true, 'id' => 'msg-1']], 200)]);
+    WuzPhoneJid::create(['phone' => '5538999037449', 'jid' => '243808616845420@lid', 'lid' => '243808616845420@lid']);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
+
+    app(SendMessageAction::class)->handle($device, new SendMessageData(phone: '5538999037449', message: 'Oi'));
+
+    Http::assertSent(fn ($request) => $request['Phone'] === '243808616845420@lid');
+});
+
+it('keeps sending to the phone when its JID is a phone number', function () {
+    Http::preventStrayRequests();
+    Http::fake(['*/chat/send/text' => Http::response(['data' => ['sent' => true, 'id' => 'msg-1']], 200)]);
+    WuzPhoneJid::create(['phone' => '553899037449', 'jid' => '553899037449@s.whatsapp.net', 'lid' => '243808616845420@lid']);
+
+    $owner = TestOwner::create(['name' => 'Test']);
+    $device = WuzDevice::factory()->for($owner, 'owner')->connected()->create();
+
+    app(SendMessageAction::class)->handle($device, new SendMessageData(phone: '5538999037449', message: 'Oi'));
+
+    Http::assertSent(fn ($request) => $request['Phone'] === '553899037449');
+});
+
 it('redirects message to debug phone when WUZ_DEBUG is enabled', function () {
     config([
         'wuz.debug.enabled' => true,
