@@ -49,7 +49,7 @@ class SendMessageAction
         $validated = $this->validatePhone->handle($wuz, $data->phone);
         $phone = $validated->phone;
 
-        [$response, $messageContent] = $this->dispatchToWuz($wuz, $phone, $data);
+        [$response, $messageContent] = $this->dispatchToWuz($wuz, $validated->address(), $data);
 
         // Event constructed eagerly: a constructor TypeError is a package bug and
         // must surface. Only listener execution is wrapped — a failing listener
